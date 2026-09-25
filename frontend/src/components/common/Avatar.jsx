@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+import { BotIcon, BellIcon, CalendarIcon } from './Icons';
+
 // Helper to get initials from a person's name
 const getInitials = (name) => {
   if (!name) return '?';
@@ -34,6 +36,8 @@ function Avatar({ name, image, user, size = 'medium', isGroup = false }) {
 
   const resolvedName = name || user?.name || '';
   const resolvedImage = image || user?.avatar || '';
+  const isBot = user?.isSystemBot || false;
+  const botType = user?.botType || 'none';
 
   useEffect(() => {
     setImgError(false);
@@ -42,11 +46,25 @@ function Avatar({ name, image, user, size = 'medium', isGroup = false }) {
   const initials = isGroup ? '#' : getInitials(resolvedName);
   const background = getAvatarColor(resolvedName);
 
-  const resolvedSrc = !imgError && resolvedImage ? (
+  let resolvedSrc = !imgError && resolvedImage && !isBot ? (
     resolvedImage.startsWith('/uploads') && import.meta.env.VITE_BACKEND_URL
       ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '')}${resolvedImage}`
       : resolvedImage
   ) : null;
+
+  if (resolvedSrc && resolvedSrc.includes('/uploads/')) {
+    const token = sessionStorage.getItem('chatapp_token');
+    if (token && !resolvedSrc.includes('?token=')) {
+      resolvedSrc += `?token=${token}`;
+    }
+  }
+  
+  const getBotIcon = () => {
+    const iconSize = size === 'small' ? 14 : size === 'medium' ? 20 : 28;
+    if (botType === 'reminder') return <BellIcon size={iconSize} color="white" />;
+    if (botType === 'calendar') return <CalendarIcon size={iconSize} color="white" />;
+    return <BotIcon size={iconSize} color="white" />;
+  };
 
   return (
     <div className={`avatar-container avatar-${size}`} title={name}>
@@ -57,6 +75,10 @@ function Avatar({ name, image, user, size = 'medium', isGroup = false }) {
           className="avatar-img"
           onError={() => setImgError(true)}
         />
+      ) : isBot ? (
+        <div className="avatar-initials" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)' }}>
+          {getBotIcon()}
+        </div>
       ) : (
         <div className="avatar-initials" style={{ background }}>
           {initials}

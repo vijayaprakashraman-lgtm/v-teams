@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import ChannelMembersModal from './ChannelMembersModal';
-import { ChannelIcon, LockIcon, SearchIcon } from '../common/Icons';
+import { ChannelIcon, LockIcon, SearchIcon, UsersIcon } from '../common/Icons';
 import {
   getAdminChannels,
   createAdminChannel,
@@ -235,7 +235,6 @@ function ChannelManagement() {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <ChannelIcon size={15} /> All Channels
           </span>
-          <span className="subnav-badge">{totalCount}</span>
         </button>
 
         <button
@@ -246,7 +245,6 @@ function ChannelManagement() {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <ChannelIcon size={15} /> Public
           </span>
-          <span className="subnav-badge">{publicCount}</span>
         </button>
 
         <button
@@ -257,7 +255,6 @@ function ChannelManagement() {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <LockIcon size={15} /> Private
           </span>
-          <span className="subnav-badge">{privateCount}</span>
         </button>
 
         <button
@@ -266,9 +263,6 @@ function ChannelManagement() {
           onClick={() => setPrivacyTab('archived')}
         >
           <span>Archived</span>
-          {archivedCount > 0 && (
-            <span className="subnav-badge">{archivedCount}</span>
-          )}
         </button>
       </div>
 
@@ -288,13 +282,6 @@ function ChannelManagement() {
           />
         </div>
 
-        <button
-          type="button"
-          className="btn-action-small btn-primary"
-          onClick={() => setCreateModalState({ isOpen: true, name: '', description: '', isPrivate: false, loading: false })}
-        >
-          + Create Channel
-        </button>
       </div>
 
       {/* Alert Notices */}
@@ -371,38 +358,38 @@ function ChannelManagement() {
                   <td>
                     <button
                       type="button"
-                      className="btn-member-count-pill"
+                      className="btn-member-count-subtle"
                       onClick={() => setSelectedChannelForMembers(ch)}
                       title="Manage channel members"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}
                     >
-                      <ChannelIcon size={13} /> {ch.memberCount} members
+                      <UsersIcon size={14} /> {ch.memberCount}
                     </button>
                   </td>
                   <td className="text-muted">{formatDate(ch.createdAt)}</td>
                   <td className="text-right">
-                    <div className="table-actions-group">
+                    <div className="table-actions-group" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                       <button
                         type="button"
-                        className="btn-action-small btn-secondary"
                         onClick={() => handleOpenEdit(ch)}
                         title="Edit channel settings"
+                        style={{ background: 'rgba(14, 165, 233, 0.1)', border: '1px solid rgba(14, 165, 233, 0.2)', color: '#0ea5e9', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
-                        className={`btn-action-small ${ch.isArchived ? 'btn-success' : 'btn-warn'}`}
                         onClick={() => handleArchivePrompt(ch)}
                         title={ch.isArchived ? 'Unarchive channel' : 'Archive channel'}
+                        style={{ background: ch.isArchived ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', border: ch.isArchived ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(245, 158, 11, 0.2)', color: ch.isArchived ? '#10b981' : '#f59e0b', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}
                       >
                         {ch.isArchived ? 'Unarchive' : 'Archive'}
                       </button>
                       <button
                         type="button"
-                        className="btn-action-small btn-danger"
                         onClick={() => setDeleteModalState({ isOpen: true, channel: ch, loading: false })}
                         title="Delete channel and purge message history"
+                        style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}
                       >
                         Delete
                       </button>

@@ -1,6 +1,26 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 import { ChatIcon } from '../common/Icons';
+
+const getMessageDateGroup = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  
+  const dateMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const diffTime = nowMidnight.getTime() - dateMidnight.getTime();
+  const diffDays = Math.round(diffTime / 86400000);
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]}`;
+};
 
 function MessageList({
   messages = [],
@@ -95,20 +115,24 @@ function MessageList({
       )}
 
       <div className="messages-stream">
-        <div className="message-date-divider">
-          <span>Conversation History</span>
-        </div>
-
         {messages.map((msg, index) => {
           const msgId = (msg._id || msg.id)?.toString();
           const isTarget = highlightedMessageId && msgId === highlightedMessageId.toString();
           const prevMsg = index > 0 ? messages[index - 1] : null;
+          
+          const currentGroup = getMessageDateGroup(msg.createdAt);
+          const prevGroup = prevMsg ? getMessageDateGroup(prevMsg.createdAt) : null;
+          const showDateDivider = currentGroup !== prevGroup && currentGroup !== '';
+
           const currentSenderId = (msg.sender?._id || msg.sender?.id || msg.sender)?.toString();
           const prevSenderId = prevMsg ? (prevMsg.sender?._id || prevMsg.sender?.id || prevMsg.sender)?.toString() : null;
           const currentTime = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
           const prevTime = prevMsg?.createdAt ? new Date(prevMsg.createdAt).getTime() : 0;
           const isWithinTimeWindow = !currentTime || !prevTime || Math.abs(currentTime - prevTime) < 5 * 60 * 1000;
+          
+          // Reset consecutive check if there's a date divider
           const isConsecutive = Boolean(
+            !showDateDivider &&
             prevSenderId &&
             currentSenderId === prevSenderId &&
             !msg.type &&
@@ -117,7 +141,13 @@ function MessageList({
           );
 
           return (
-            <MessageBubble
+            <React.Fragment key={msgId || msg.createdAt}>
+              {showDateDivider && (
+                <div className="message-date-divider">
+                  <span>{currentGroup}</span>
+                </div>
+              )}
+              <MessageBubble
               key={msgId || msg.createdAt}
               message={msg}
               currentUserId={currentUserId}
@@ -142,6 +172,7 @@ function MessageList({
               onMarkLinkCopied={onMarkLinkCopied}
               onOpenPollModal={onOpenPollModal}
             />
+            </React.Fragment>
           );
         })}
         <div ref={bottomRef} />

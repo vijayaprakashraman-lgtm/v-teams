@@ -90,8 +90,8 @@ function AuditLogViewer() {
   return (
     <div className="admin-section-container">
       {/* 1. Filter and Search Control Bar */}
-      <div className="admin-control-bar">
-        <div className="admin-search-input-wrapper">
+      <div className="admin-control-bar" style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+        <div className="admin-search-input-wrapper" style={{ flex: 1 }}>
           <span className="search-icon"><SearchIcon size={15} color="var(--text-muted)" /></span>
           <input
             type="text"
@@ -102,7 +102,7 @@ function AuditLogViewer() {
           />
         </div>
 
-        <div className="admin-filter-group">
+        <div className="admin-filter-group" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <select
             className="admin-select"
             value={targetTypeFilter}
@@ -170,12 +170,12 @@ function AuditLogViewer() {
                   <td>
                     <div className="user-cell">
                       <Avatar name={log.admin?.name || 'Admin'} image={log.admin?.avatar} size="small" />
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.3' }}>
                         <span className="font-semibold" style={{ color: 'var(--text-main)' }}>
                           {log.admin?.name || 'Administrator'}
                         </span>
                         {log.admin?.email && (
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '1px' }}>
                             {log.admin.email}
                           </span>
                         )}

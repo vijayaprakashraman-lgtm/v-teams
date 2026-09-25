@@ -141,48 +141,73 @@ const initSocket = (io) => {
       console.error('Presence update error:', error.message);
     });
 
-    // Track active connection count for presence
-    const currentCount = userConnections.get(userId) || 0;
-    userConnections.set(userId, currentCount + 1);
+    const joinOrgPresence = async (targetOrgId) => {
+      if (!targetOrgId) return;
+      const connectionKey = `${userId}_${targetOrgId}`;
+      const currentCount = userConnections.get(connectionKey) || 0;
+      userConnections.set(connectionKey, currentCount + 1);
 
-    // If this is the user's first active connection, broadcast user:online to company room
-    if (currentCount === 0 && orgId) {
-      io.to(`company:${orgId}`).emit('user:online', {
-        userId,
-        userName: socket.user.name,
-      });
-    }
+      if (currentCount === 0) {
+        io.to(`company:${targetOrgId}`).emit('user:online', {
+          userId,
+          userName: socket.user.name,
+        });
+      }
 
-    // Send the list of online user IDs belonging to this user's active organization
-    let onlineUserIdsInOrg = [];
-    if (orgId) {
       try {
         const Membership = require('../models/Membership');
         const orgMemberships = await Membership.find({
-          organization: orgId,
+          organization: targetOrgId,
           status: 'active',
-          user: { $in: Array.from(userConnections.keys()) },
         }).select('user');
-        onlineUserIdsInOrg = orgMemberships.map((m) => m.user.toString());
+        
+        const orgMemberIds = orgMemberships.map((m) => m.user.toString());
+        const onlineUserIdsInOrg = orgMemberIds.filter(uid => (userConnections.get(`${uid}_${targetOrgId}`) || 0) > 0);
+        
+        socket.emit('users:online', {
+          onlineUserIds: onlineUserIdsInOrg,
+        });
       } catch (err) {
         console.error('Error fetching online user list for organization:', err.message);
       }
+    };
+
+    const leaveOrgPresence = (targetOrgId) => {
+      if (!targetOrgId) return;
+      const connectionKey = `${userId}_${targetOrgId}`;
+      const remaining = (userConnections.get(connectionKey) || 1) - 1;
+      
+      if (remaining <= 0) {
+        userConnections.delete(connectionKey);
+        io.to(`company:${targetOrgId}`).emit('user:offline', { userId, lastSeenAt: new Date() });
+      } else {
+        userConnections.set(connectionKey, remaining);
+      }
+    };
+
+    if (orgId) {
+      await joinOrgPresence(orgId);
     }
-    socket.emit('users:online', {
-      onlineUserIds: onlineUserIdsInOrg,
-    });
 
     // Company room dynamic switch handler
-    socket.on('company:join', ({ companyId }) => {
+    socket.on('company:join', async ({ companyId }) => {
       if (companyId) {
-        // Leave all previous company rooms
-        Array.from(socket.rooms).forEach((room) => {
-          if (room.startsWith('company:')) {
-            socket.leave(room);
-          }
-        });
+        const currentOrg = socket.user.currentOrganization?.toString();
+        if (currentOrg === companyId.toString()) return;
+
+        if (currentOrg) {
+          leaveOrgPresence(currentOrg);
+          Array.from(socket.rooms).forEach((room) => {
+            if (room.startsWith('company:')) {
+              socket.leave(room);
+            }
+          });
+        }
+        
         socket.join(`company:${companyId}`);
+        socket.user.currentOrganization = companyId;
         console.log(`Socket ${socket.id} joined company room: company:${companyId}`);
+        await joinOrgPresence(companyId);
       }
     });
 
@@ -286,13 +311,25 @@ const initSocket = (io) => {
     });
 
     // 6. Group Channel Typing Events
-    socket.on('channel:typing', ({ channelId }) => {
+    socket.on('channel:typing', async ({ channelId }) => {
       if (channelId) {
-        socket.to(`channel:${channelId}`).emit('channel:typing', {
-          channelId,
-          userId,
-          userName: socket.user.name,
-        });
+        try {
+          const Channel = require('../models/Channel');
+          const channel = await Channel.findById(channelId).select('isAdminOnly admins createdBy').lean();
+          if (channel?.isAdminOnly) {
+            const isCreator = channel.createdBy?.toString() === userId;
+            const isChannelAdmin = channel.admins?.some(a => a.toString() === userId);
+            const isOrgAdmin = ['admin', 'owner', 'super_admin'].includes(socket.user?.role) || ['admin', 'owner', 'super_admin'].includes(socket.user?.globalRole);
+            if (!isCreator && !isChannelAdmin && !isOrgAdmin) return;
+          }
+          socket.to(`channel:${channelId}`).emit('channel:typing', {
+            channelId,
+            userId,
+            userName: socket.user.name,
+          });
+        } catch (err) {
+          console.error('Typing event error:', err.message);
+        }
       }
     });
 
@@ -305,10 +342,8 @@ const initSocket = (io) => {
       }
     });
 
-    // 7. Disconnect Handler
-    socket.on('disconnect', () => {
-      console.log(`[Socket Disconnected] User: ${socket.user.name} (${userId}) | Socket ID: ${socket.id}`);
-
+    // 7. Disconnecting Handler (fires before rooms are cleared)
+    socket.on('disconnecting', () => {
       // Broadcast stop typing to all rooms the user was part of
       socket.rooms.forEach((room) => {
         if (room.startsWith('conversation:')) {
@@ -319,18 +354,49 @@ const initSocket = (io) => {
           socket.to(room).emit('channel:stop_typing', { channelId, userId });
         }
       });
+    });
 
-      const remaining = (userConnections.get(userId) || 1) - 1;
-      if (remaining <= 0) {
-        userConnections.delete(userId);
-        User.updateOne({ _id: userId }, { $set: { lastSeenAt: new Date() } }).catch((error) => {
-          console.error('Last-seen update error:', error.message);
-        });
-        if (orgId) {
-          io.to(`company:${orgId}`).emit('user:offline', { userId, lastSeenAt: new Date() });
+    // 7. Disconnect Handler
+    socket.on('disconnect', async () => {
+      console.log(`[Socket Disconnected] User: ${socket.user.name} (${userId}) | Socket ID: ${socket.id}`);
+
+      const currentOrgId = socket.user.currentOrganization?.toString();
+      if (currentOrgId) {
+        leaveOrgPresence(currentOrgId);
+      }
+
+      // Check if user has NO connections across ANY orgs before updating DB
+      try {
+        const sockets = await io.in(`user:${userId}`).fetchSockets();
+        if (sockets.length === 0) {
+          User.updateOne({ _id: userId }, { $set: { lastSeenAt: new Date() } }).catch((error) => {
+            console.error('Last-seen update error:', error.message);
+          });
+          
+          // Cleanup active calls for this user
+          for (const [sessionKey, session] of activeCalls.entries()) {
+            if (session.callerId === userId || session.receiverId === userId) {
+              const otherUserId = session.callerId === userId ? session.receiverId : session.callerId;
+              activeCalls.delete(sessionKey);
+              
+              recordCallMessage({
+                callerId: session.callerId,
+                receiverId: session.receiverId,
+                callType: session.callType,
+                status: session.connected ? 'completed' : 'missed',
+                duration: session.connectedAt ? Math.floor((Date.now() - session.connectedAt) / 1000) : 0,
+                conversationId: session.conversationId,
+                orgId: session.orgId,
+              });
+
+              io.to(`user:${otherUserId}`).emit('call:ended', {
+                senderId: userId,
+              });
+            }
+          }
         }
-      } else {
-        userConnections.set(userId, remaining);
+      } catch (err) {
+        console.error('Error fetching sockets on disconnect:', err.message);
       }
     });
 
@@ -470,6 +536,104 @@ const initSocket = (io) => {
         io.to(`user:${data.targetId}`).emit('call:ended', {
           senderId: userId,
         });
+      }
+    });
+
+    // 9. LiveKit Invitation Signaling
+    socket.on('livekit:invite', async (data) => {
+      // data: { inviteeId, roomId, contextName, channelId, conversationId }
+      if (data.inviteeId) {
+        const CallInvitation = require('../models/CallInvitation');
+        try {
+          // Save invitation to DB
+          await CallInvitation.findOneAndUpdate(
+            { invitee: data.inviteeId, roomId: data.roomId },
+            { 
+              inviter: userId,
+              contextName: data.contextName,
+              status: 'pending',
+              createdAt: new Date()
+            },
+            { upsert: true, new: true }
+          );
+
+          // Emit to invitee
+          io.to(`user:${data.inviteeId}`).emit('livekit:incoming_invite', {
+            inviterId: userId,
+            inviterName: socket.user.name,
+            inviterAvatar: socket.user.avatar,
+            roomId: data.roomId,
+            contextName: data.contextName,
+            channelId: data.channelId,
+            conversationId: data.conversationId,
+          });
+        } catch (err) {
+          console.error('Error saving LiveKit invitation:', err.message);
+        }
+      }
+    });
+
+    socket.on('livekit:accept', async (data) => {
+      // data: { inviterId, roomId }
+      if (data.roomId) {
+        const CallInvitation = require('../models/CallInvitation');
+        try {
+          await CallInvitation.findOneAndUpdate(
+            { invitee: userId, roomId: data.roomId, status: 'pending' },
+            { status: 'accepted' }
+          );
+        } catch (err) {
+          console.error('Error accepting LiveKit invitation:', err.message);
+        }
+      }
+    });
+
+    socket.on('livekit:decline', async (data) => {
+      // data: { inviterId, roomId }
+      if (data.roomId) {
+        const CallInvitation = require('../models/CallInvitation');
+        try {
+          await CallInvitation.findOneAndUpdate(
+            { invitee: userId, roomId: data.roomId, status: 'pending' },
+            { status: 'declined' }
+          );
+          
+          if (data.inviterId) {
+            io.to(`user:${data.inviterId}`).emit('livekit:declined', {
+              inviteeId: userId,
+              inviteeName: socket.user.name,
+              roomId: data.roomId
+            });
+          }
+        } catch (err) {
+          console.error('Error declining LiveKit invitation:', err.message);
+        }
+      }
+    });
+    socket.on('livekit:start_channel_call', async (data) => {
+      // data: { channelId, roomId, contextName }
+      if (data.channelId) {
+        const Channel = require('../models/Channel');
+        try {
+          const channel = await Channel.findById(data.channelId);
+          if (channel) {
+            // Emit incoming invite to all channel members except the caller
+            channel.members.forEach(memberId => {
+              if (memberId.toString() !== userId) {
+                io.to(`user:${memberId.toString()}`).emit('livekit:incoming_invite', {
+                  inviterId: userId,
+                  inviterName: socket.user.name,
+                  inviterAvatar: socket.user.avatar,
+                  roomId: data.roomId,
+                  contextName: data.contextName,
+                  channelId: data.channelId,
+                });
+              }
+            });
+          }
+        } catch (err) {
+          console.error('Error starting channel call:', err.message);
+        }
       }
     });
   });

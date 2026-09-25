@@ -1,28 +1,19 @@
 const express = require('express');
 const router = express.Router();
+const { protect } = require('../middleware/authMiddleware');
 const {
   getNotifications,
   getUnreadCount,
-  markNotificationRead,
-  markAllNotificationsRead,
+  markRead,
+  markAllRead,
 } = require('../controllers/notificationController');
-const { protect } = require('../middleware/authMiddleware');
 
-// All notification endpoints require JWT authentication
+// All notification routes require authentication
 router.use(protect);
 
-router.route('/')
-  .get(getNotifications);
-
-router.route('/unread-count')
-  .get(getUnreadCount);
-
-router.route('/read-all')
-  .patch(markAllNotificationsRead)
-  .put(markAllNotificationsRead);
-
-router.route('/:id/read')
-  .patch(markNotificationRead)
-  .put(markNotificationRead);
+router.get('/', getNotifications);
+router.get('/unread-count', getUnreadCount);
+router.patch('/read-all', markAllRead);
+router.patch('/:id/read', markRead);
 
 module.exports = router;

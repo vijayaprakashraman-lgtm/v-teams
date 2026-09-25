@@ -1,5 +1,8 @@
 const Reminder = require('../models/Reminder');
 const Notification = require('../models/Notification');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
+const User = require('../models/User');
 
 /**
  * Calculate the next reminder time for repeating reminders
@@ -110,6 +113,68 @@ const initReminderScheduler = (io) => {
           }
         } catch (notifErr) {
           console.error('Error creating in-app notification for reminder:', notifErr.message);
+        }
+
+        // 2. Dispatch Bot Message if it's a bot-managed reminder
+        try {
+          const botType = reminder.source === 'google_calendar' ? 'calendar' : 'reminder';
+          const botUser = await User.findOne({ isSystemBot: true, botType });
+          
+          if (botUser) {
+            // Find or create a direct conversation between user and bot
+            let conversation = await Conversation.findOne({
+              organization: reminder.organization,
+              participants: { $all: [reminder.userId, botUser._id], $size: 2 }
+            });
+            
+            if (!conversation) {
+              conversation = await Conversation.create({
+                organization: reminder.organization,
+                participants: [reminder.userId, botUser._id]
+              });
+            }
+            
+            let messageContent = `🔔 Reminder: "${reminder.title}" is due!`;
+            if (reminder.source === 'google_calendar') {
+              if (reminder.googleEventId && reminder.googleEventId.endsWith('_10min')) {
+                messageContent = `📅 Google Calendar Event: "${reminder.title}" is starting in 10 minutes!`;
+              } else if (reminder.googleEventId && reminder.googleEventId.endsWith('_exact')) {
+                messageContent = `📅 Google Calendar Event: "${reminder.title}" is starting now!`;
+              } else {
+                messageContent = `📅 Google Calendar Event: "${reminder.title}" is starting soon!`;
+              }
+            }
+            if (reminder.description) {
+              messageContent += `\n\n${reminder.description}`;
+            }
+            
+            const botMessage = await Message.create({
+              conversationId: conversation._id,
+              sender: botUser._id,
+              receiver: reminder.userId,
+              content: messageContent,
+              organization: reminder.organization,
+            });
+            
+            conversation.lastMessage = botMessage._id;
+            conversation.lastMessageAt = botMessage.createdAt;
+            await conversation.save();
+            
+            // Emit new message event to the user
+            if (io && userIdStr) {
+              const populatedMessage = await Message.findById(botMessage._id).populate('sender', 'name email avatar isSystemBot botType');
+              io.to(`user:${userIdStr}`).emit('message:new', populatedMessage);
+              
+              // Also emit conversation update so it bubbles up to the top of the sidebar
+              io.to(`user:${userIdStr}`).emit('conversation:updated', {
+                conversationId: conversation._id,
+                lastMessage: populatedMessage,
+                lastMessageAt: conversation.lastMessageAt,
+              });
+            }
+          }
+        } catch (botErr) {
+          console.error('Error dispatching bot message:', botErr.message);
         }
 
         // 3. Handle repeat logic or auto-complete status transition

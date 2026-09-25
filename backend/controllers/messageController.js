@@ -263,6 +263,26 @@ const editMessage = async (req, res) => {
       });
     }
 
+    // Admin Only Channel Check for Edit
+    if (message.channelId) {
+      const channel = await Channel.findById(message.channelId);
+      if (channel && channel.isAdminOnly) {
+        const creatorIdStr = (channel.createdBy?._id || channel.createdBy?.id || channel.createdBy)?.toString();
+        const isCreator = Boolean(creatorIdStr && creatorIdStr === userId);
+        const isChannelAdmin = (channel.admins || []).some(
+          (a) => (a?._id || a?.id || a)?.toString() === userId
+        );
+        const isOrgAdmin = ['admin', 'owner', 'super_admin'].includes(req.user.role) || ['admin', 'owner', 'super_admin'].includes(req.user.globalRole);
+
+        if (!isCreator && !isChannelAdmin && !isOrgAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only channel admins can edit messages in this channel',
+          });
+        }
+      }
+    }
+
     // Update message content and timestamps
     message.content = content.trim();
     message.edited = true;
@@ -347,6 +367,26 @@ const deleteMessage = async (req, res) => {
         success: false,
         message: 'You are not authorized to delete this message',
       });
+    }
+
+    // Admin Only Channel Check for Delete
+    if (message.channelId && isSender && !isAdmin) {
+      const channel = await Channel.findById(message.channelId);
+      if (channel && channel.isAdminOnly) {
+        const creatorIdStr = (channel.createdBy?._id || channel.createdBy?.id || channel.createdBy)?.toString();
+        const isCreator = Boolean(creatorIdStr && creatorIdStr === userId);
+        const isChannelAdmin = (channel.admins || []).some(
+          (a) => (a?._id || a?.id || a)?.toString() === userId
+        );
+        const isOrgAdmin = ['admin', 'owner', 'super_admin'].includes(req.user.role) || ['admin', 'owner', 'super_admin'].includes(req.user.globalRole);
+
+        if (!isCreator && !isChannelAdmin && !isOrgAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only channel admins can delete messages in this channel',
+          });
+        }
+      }
     }
 
     // Apply soft deletion
@@ -621,6 +661,23 @@ const forwardMessage = async (req, res) => {
           message: 'Destination channel belongs to another organization',
         });
       }
+      
+      // Admin Only Channel Check
+      if (destChan.isAdminOnly) {
+        const creatorIdStr = (destChan.createdBy?._id || destChan.createdBy?.id || destChan.createdBy)?.toString();
+        const isCreator = Boolean(creatorIdStr && creatorIdStr === userId);
+        const isChannelAdmin = (destChan.admins || []).some(
+          (a) => (a?._id || a?.id || a)?.toString() === userId
+        );
+        const isOrgAdmin = ['admin', 'owner', 'super_admin'].includes(req.user.role) || ['admin', 'owner', 'super_admin'].includes(req.user.globalRole);
+
+        if (!isCreator && !isChannelAdmin && !isOrgAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only channel admins can forward messages to this channel',
+          });
+        }
+      }
 
       newMessageDoc = await Message.create({
         organization: destChan.organization,
@@ -743,6 +800,23 @@ const addReaction = async (req, res) => {
           message: 'Not authorized to react to this message',
         });
       }
+
+      // Admin Only Channel Check for Reactions
+      if (channel.isAdminOnly) {
+        const creatorIdStr = (channel.createdBy?._id || channel.createdBy?.id || channel.createdBy)?.toString();
+        const isCreator = Boolean(creatorIdStr && creatorIdStr === userId);
+        const isChannelAdmin = (channel.admins || []).some(
+          (a) => (a?._id || a?.id || a)?.toString() === userId
+        );
+        const isOrgAdmin = ['admin', 'owner', 'super_admin'].includes(req.user.role) || ['admin', 'owner', 'super_admin'].includes(req.user.globalRole);
+
+        if (!isCreator && !isChannelAdmin && !isOrgAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only channel admins can react to messages in this channel',
+          });
+        }
+      }
     }
 
     // 4. Atomic update: add user to existing emoji entry, or create new entry
@@ -852,6 +926,23 @@ const removeReaction = async (req, res) => {
           success: false,
           message: 'Not authorized to modify reactions on this message',
         });
+      }
+
+      // Admin Only Channel Check for Remove Reaction
+      if (channel.isAdminOnly) {
+        const creatorIdStr = (channel.createdBy?._id || channel.createdBy?.id || channel.createdBy)?.toString();
+        const isCreator = Boolean(creatorIdStr && creatorIdStr === userId);
+        const isChannelAdmin = (channel.admins || []).some(
+          (a) => (a?._id || a?.id || a)?.toString() === userId
+        );
+        const isOrgAdmin = ['admin', 'owner', 'super_admin'].includes(req.user.role) || ['admin', 'owner', 'super_admin'].includes(req.user.globalRole);
+
+        if (!isCreator && !isChannelAdmin && !isOrgAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only channel admins can modify reactions in this channel',
+          });
+        }
       }
     }
 

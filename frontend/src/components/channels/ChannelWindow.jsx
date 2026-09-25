@@ -111,14 +111,20 @@ function ChannelWindow({
     ) ||
       (channel.createdBy?._id || channel.createdBy?.id || channel.createdBy)?.toString() ===
         currentUserId?.toString() ||
-      userRole === 'admin'
+      ['admin', 'owner', 'super_admin'].includes(userRole) ||
+      ['admin', 'owner', 'super_admin'].includes(user?.globalRole)
   );
 
   // Check if user has permission to manage channel
-  const canManage = isChannelAdmin;
+  const canManage = Boolean(
+    isChannelAdmin ||
+    ['admin', 'owner', 'super_admin'].includes(userRole) ||
+    ['admin', 'owner', 'super_admin'].includes(user?.globalRole) ||
+    (channel.createdBy && (channel.createdBy._id || channel.createdBy.id || channel.createdBy).toString() === currentUserId?.toString())
+  );
 
   // Check if user can send messages (must be a member and, if admin-only channel, must be channel admin)
-  const canSendMessages = isMember && (!channel.isAdminOnly || isChannelAdmin);
+  const canSendMessages = isMember && (!channel.isAdminOnly || isChannelAdmin || canManage);
 
   const memberList = Array.isArray(channel.members) ? channel.members : [];
 
@@ -205,12 +211,32 @@ function ChannelWindow({
                   <h3 className="chat-header-name">{channel.name}</h3>
                 </div>
                 <span className="chat-header-status">
-                  {channel.description || 'General team discussion'}
+                  {channel.description || `${channel.members?.length || 0} member${channel.members?.length === 1 ? '' : 's'}`}
                 </span>
               </div>
             </div>
 
             <div className="chat-header-actions">
+              {/* Start/Join LiveKit Group Call */}
+              {isMember && (
+                <button
+                  type="button"
+                  className="btn-icon-action"
+                  title={`Video Call in #${channel.name}`}
+                  aria-label="Video Call"
+                  onClick={() => {
+                    const event = new CustomEvent('join-livekit-call', { 
+                      detail: { roomId: channelId, channelId: channelId, isGroup: true, contextName: channel.name, isInitiating: true } 
+                    });
+                    window.dispatchEvent(event);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7" />
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                  </svg>
+                </button>
+              )}
               {/* Add To-Do Shortcut */}
               {onCreateTodo && !isPlanDisabled && (
                 <button
@@ -440,7 +466,7 @@ function ChannelWindow({
                 hasMore={hasMore}
                 loadingOlder={loadingOlder}
                 onLoadOlder={onLoadOlder}
-                onReply={channel.isArchived ? null : (isMember ? (msg) => setReplyingTo(msg) : null)}
+                onReply={channel.isArchived || !canSendMessages ? null : (msg) => setReplyingTo(msg)}
                 onForward={(msg) => setForwardingMessage(msg)}
                 onEdit={onEditMessage}
                 onDelete={onDeleteMessage}
@@ -475,10 +501,10 @@ function ChannelWindow({
                   <span className="archived-icon">📦</span>
                   <span>This channel is archived. New messages cannot be sent.</span>
                 </div>
-              ) : channel.isAdminOnly && !canSendMessages && !replyingTo ? (
+              ) : channel.isAdminOnly && !canSendMessages ? (
                 <div className="admin-only-channel-banner">
                   <span className="admin-only-icon">🔒</span>
-                  <span>Only Channel Admins can post messages in this channel.</span>
+                  <span>Only channel admins can send messages</span>
                 </div>
               ) : isPlanDisabled ? (
                 <div className="plan-disabled-input-bar">

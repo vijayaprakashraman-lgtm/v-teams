@@ -76,7 +76,7 @@ function Sidebar({
           </svg>
         </div>
         <div className="brand-text">
-          <span className="brand-title">ChatApp</span>
+          <span className="brand-title">V Chat</span>
           <span className="brand-subtitle">{user?.currentOrganization?.name || 'Team Workspace'}</span>
         </div>
 
@@ -223,7 +223,6 @@ function Sidebar({
               <CalendarIcon size={18} />
             </span>
             <span className="nav-label">Google Calendar</span>
-            {calendarConnected && <span className="gcal-connected-dot" aria-label="Connected" />}
           </button>
 
           <button

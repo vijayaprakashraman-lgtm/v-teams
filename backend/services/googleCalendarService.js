@@ -1,7 +1,8 @@
 const { google } = require("googleapis");
 const jwt = require("jsonwebtoken");
 const GoogleCalendarToken = require("../models/GoogleCalendarToken");
-
+const User = require("../models/User");
+const Reminder = require("../models/Reminder");
 const JWT_SECRET = process.env.JWT_SECRET || "flock_secret_jwt_key_2026_super_secure_token_auth";
 
 /**
@@ -52,9 +53,10 @@ const getAuthUrl = (userId) => {
 
   return oauth2Client.generateAuthUrl({
     access_type: "offline",    // Required to receive a refresh_token
-    prompt: "select_account",  // User must explicitly choose their Google account
+    prompt: "consent select_account",  // Force consent screen to always get a new refresh_token
     scope: [
       "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/userinfo.email",
     ],
     state: stateToken,         // Signed JWT - verified in the callback
@@ -148,10 +150,100 @@ const getAuthenticatedCalendarClient = async (userId) => {
   return google.calendar({ version: "v3", auth: oauth2Client });
 };
 
+/**
+ * Syncs the next 7 days of Google Calendar events into local Reminder models
+ * for a specific user.
+ */
+const syncUpcomingEventsToReminders = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    if (!user || !user.currentOrganization) return;
+    
+    const calendar = await getAuthenticatedCalendarClient(userId);
+    const timeMin = new Date().toISOString();
+    const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+    
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin,
+      timeMax,
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+    
+    const events = response.data.items || [];
+    
+    for (const event of events) {
+      const eventStartStr = event.start?.dateTime || event.start?.date;
+      if (!eventStartStr) continue;
+      
+      const eventStart = new Date(eventStartStr);
+      const reminderTime10Min = new Date(eventStart.getTime() - 10 * 60000); 
+      const reminderTimeExact = new Date(eventStart.getTime());
+
+      // 10 minutes before reminder
+      if (reminderTime10Min >= new Date()) {
+        await Reminder.findOneAndUpdate(
+          { userId, googleEventId: event.id + '_10min' },
+          {
+            title: event.summary || 'Google Calendar Event',
+            description: event.description || '',
+            organization: user.currentOrganization,
+            userId: userId,
+            reminderTime: reminderTime10Min,
+            source: 'google_calendar',
+            googleEventId: event.id + '_10min',
+            status: 'pending',
+            isNotified: false
+          },
+          { upsert: true, new: true }
+        );
+      }
+
+      // Exact time reminder
+      if (reminderTimeExact >= new Date()) {
+        await Reminder.findOneAndUpdate(
+          { userId, googleEventId: event.id + '_exact' },
+          {
+            title: event.summary || 'Google Calendar Event',
+            description: event.description || '',
+            organization: user.currentOrganization,
+            userId: userId,
+            reminderTime: reminderTimeExact,
+            source: 'google_calendar',
+            googleEventId: event.id + '_exact',
+            status: 'pending',
+            isNotified: false
+          },
+          { upsert: true, new: true }
+        );
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to sync calendar events for user ${userId}:`, err.message);
+  }
+};
+
+/**
+ * Syncs calendar events for all users with a connected Google Calendar.
+ */
+const syncAllUsersCalendarEvents = async () => {
+  try {
+    const tokens = await GoogleCalendarToken.find({});
+    for (const t of tokens) {
+      await syncUpcomingEventsToReminders(t.user);
+    }
+  } catch (err) {
+    console.error('Failed to sync all users calendar events:', err.message);
+  }
+};
+
 module.exports = {
   getAuthUrl,
   exchangeCodeForTokens,
   getGoogleEmail,
   verifyStateToken,
   getAuthenticatedCalendarClient,
+  syncUpcomingEventsToReminders,
+  syncAllUsersCalendarEvents,
 };

@@ -192,6 +192,25 @@ const handleUpload = (fieldName = 'files', maxCount = 5) => {
               cleanupUploadedFiles();
               const limitGB = (totalStorageLimitBytes / (1024 * 1024 * 1024)).toFixed(1);
               const usedGB = (currentUsedBytes / (1024 * 1024 * 1024)).toFixed(2);
+              
+              // 🤖 Trigger System Bot Notification
+              const { dispatchSystemBotMessage } = require('../services/botService');
+              const io = req.app ? req.app.get('io') : null;
+              const isChannel = req.baseUrl.includes('/channels');
+              const isConversation = req.baseUrl.includes('/conversations');
+              const targetId = req.params.id;
+              
+              if (targetId && (isChannel || isConversation)) {
+                dispatchSystemBotMessage({
+                  botType: 'system',
+                  content: `⚠️ Workspace storage limit reached (${usedGB} GB of ${limitGB} GB used). The attempted file upload was blocked. Please free up space or ask an admin to upgrade the plan.`,
+                  channelId: isChannel ? targetId : undefined,
+                  conversationId: isConversation ? targetId : undefined,
+                  organizationId: orgId,
+                  io
+                }).catch(err => console.error('Failed to send storage bot message', err));
+              }
+
               return res.status(413).json({
                 success: false,
                 message: `Workspace storage limit reached (${usedGB} GB of ${limitGB} GB used). Upgrade to Professional for more storage capacity.`,

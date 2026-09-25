@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Avatar from '../common/Avatar';
 import { ReminderIcon } from '../common/Icons';
 
@@ -13,6 +13,7 @@ function NotificationDropdown({
 }) {
   const latestNotif = notifications.length > 0 ? notifications[0] : null;
   const latestRef = useRef(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const formatTime = (dateString) => {
     if (!dateString) return '';
@@ -29,16 +30,20 @@ function NotificationDropdown({
     return `${diffDays}d ago`;
   };
 
-  // Auto-mark the latest visible notification as read when dropdown opens
+  // Auto-mark visible notifications as read when dropdown opens or expands
   useEffect(() => {
-    if (!latestNotif) return;
-    const notifId = (latestNotif._id || latestNotif.id)?.toString();
-    const isUnread = !latestNotif.isRead;
-    if (notifId && isUnread && typeof onMarkAsRead === 'function') {
-      const timer = setTimeout(() => onMarkAsRead(notifId), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [latestNotif, onMarkAsRead]);
+    if (notifications.length === 0) return;
+    const visibleNotifs = isExpanded ? notifications : [notifications[0]];
+    
+    visibleNotifs.forEach(notif => {
+      if (!notif) return;
+      const notifId = (notif._id || notif.id)?.toString();
+      const isUnread = !notif.isRead;
+      if (notifId && isUnread && typeof onMarkAsRead === 'function') {
+        setTimeout(() => onMarkAsRead(notifId), 300);
+      }
+    });
+  }, [notifications, isExpanded, onMarkAsRead]);
 
   const handleItemClick = (notification) => {
     const notifId = notification._id || notification.id;
@@ -79,71 +84,93 @@ function NotificationDropdown({
         )}
       </div>
 
-      {/* Body — shows only the latest notification */}
-      <div className="notif-single-body">
-        {loading && !latestNotif ? (
+      {/* Body */}
+      <div 
+        className={isExpanded ? "notif-expanded-body" : "notif-single-body"} 
+        style={isExpanded ? { maxHeight: '350px', overflowY: 'auto' } : {}}
+      >
+        {loading && notifications.length === 0 ? (
           <div className="notif-empty-state">Loading...</div>
-        ) : !latestNotif ? (
+        ) : notifications.length === 0 ? (
           <div className="notif-empty-state">
             <span className="notif-empty-icon"><ReminderIcon size={32} color="var(--text-muted)" /></span>
             <p>No new notifications</p>
           </div>
         ) : (
-          <div
-            ref={latestRef}
-            data-notif-id={notifId}
-            data-unread={isUnread}
-            className={`notif-item ${isUnread ? 'unread' : 'read'}`}
-            onClick={() => handleItemClick(latestNotif)}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="notif-avatar-wrapper">
-              <Avatar
-                name={senderName}
-                image={latestNotif.sender?.avatar}
-                size="small"
-              />
-              {latestNotif.type === 'reminder_due' && (
-                <span className="notif-badge-mention" style={{ background: 'rgba(2, 132, 199, 0.9)' }}>⏰</span>
-              )}
-              {latestNotif.type === 'mention' && (
-                <span className="notif-badge-mention">@</span>
-              )}
-              {latestNotif.type === 'channel_activity' && (
-                <span className="notif-badge-channel">#</span>
-              )}
-              {latestNotif.type === 'invitation_received' && (
-                <span className="notif-badge-mention" style={{ background: 'rgba(2, 132, 199, 0.9)' }}>✉️</span>
-              )}
-              {latestNotif.type === 'invitation_accepted' && (
-                <span className="notif-badge-mention" style={{ background: 'rgba(5, 150, 105, 0.9)' }}>✓</span>
-              )}
-              {latestNotif.type === 'join_request' && (
-                <span className="notif-badge-mention" style={{ background: 'rgba(2, 132, 199, 0.9)' }}>🏢</span>
-              )}
-              {latestNotif.type === 'join_request_approved' && (
-                <span className="notif-badge-mention" style={{ background: 'rgba(5, 150, 105, 0.9)' }}>✓</span>
-              )}
-            </div>
+          (isExpanded ? notifications : [notifications[0]]).map((notif, index) => {
+            const senderName = notif.sender?.name || (notif.type === 'reminder_due' ? 'Reminder' : 'Teammate');
+            const isUnread = !notif.isRead;
+            const notifId = (notif._id || notif.id)?.toString();
 
-            <div className="notif-content-wrapper">
-              <div className="notif-top-row">
-                <span className="notif-sender">{senderName}</span>
-                <span className="notif-time">{formatTime(latestNotif.createdAt)}</span>
+            return (
+              <div
+                key={notifId || index}
+                ref={index === 0 ? latestRef : null}
+                data-notif-id={notifId}
+                data-unread={isUnread}
+                className={`notif-item ${isUnread ? 'unread' : 'read'}`}
+                onClick={() => handleItemClick(notif)}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="notif-avatar-wrapper">
+                  <Avatar
+                    name={senderName}
+                    image={notif.sender?.avatar}
+                    size="small"
+                  />
+                  {notif.type === 'reminder_due' && (
+                    <span className="notif-badge-mention" style={{ background: 'rgba(2, 132, 199, 0.9)' }}>⏰</span>
+                  )}
+                  {notif.type === 'mention' && (
+                    <span className="notif-badge-mention">@</span>
+                  )}
+                  {notif.type === 'channel_activity' && (
+                    <span className="notif-badge-channel">#</span>
+                  )}
+                  {notif.type === 'invitation_received' && (
+                    <span className="notif-badge-mention" style={{ background: 'rgba(2, 132, 199, 0.9)' }}>✉️</span>
+                  )}
+                  {notif.type === 'invitation_accepted' && (
+                    <span className="notif-badge-mention" style={{ background: 'rgba(5, 150, 105, 0.9)' }}>✓</span>
+                  )}
+                  {notif.type === 'join_request' && (
+                    <span className="notif-badge-mention" style={{ background: 'rgba(2, 132, 199, 0.9)' }}>🏢</span>
+                  )}
+                  {notif.type === 'join_request_approved' && (
+                    <span className="notif-badge-mention" style={{ background: 'rgba(5, 150, 105, 0.9)' }}>✓</span>
+                  )}
+                </div>
+
+                <div className="notif-content-wrapper">
+                  <div className="notif-top-row">
+                    <span className="notif-sender">{senderName}</span>
+                    <span className="notif-time">{formatTime(notif.createdAt)}</span>
+                  </div>
+                  <p className="notif-text">{notif.content}</p>
+                </div>
+
+                {isUnread && <span className="notif-unread-dot" />}
               </div>
-              <p className="notif-text">{latestNotif.content}</p>
-            </div>
-
-            {isUnread && <span className="notif-unread-dot" />}
-          </div>
+            );
+          })
         )}
       </div>
 
       {/* Footer hint if there are more notifications */}
       {notifications.length > 1 && (
-        <div className="notif-footer-hint">
-          +{notifications.length - 1} more notification{notifications.length - 1 > 1 ? 's' : ''}
+        <div 
+          className="notif-footer-hint" 
+          onClick={() => setIsExpanded(!isExpanded)}
+          style={{ cursor: 'pointer' }}
+          role="button"
+          tabIndex={0}
+        >
+          {isExpanded ? (
+            'Show less'
+          ) : (
+            `+${notifications.length - 1} more notification${notifications.length - 1 > 1 ? 's' : ''}`
+          )}
         </div>
       )}
     </div>

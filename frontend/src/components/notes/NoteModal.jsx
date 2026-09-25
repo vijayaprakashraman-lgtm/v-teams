@@ -60,7 +60,7 @@ function NoteModal({ isOpen, note, onClose, onSaveSuccess }) {
           <h2>{note?._id ? 'Edit Private Note' : 'Create Private Note'}</h2>
           <button
             type="button"
-            className="btn-close-modal"
+            className="btn-modal-close"
             onClick={onClose}
             aria-label="Close modal"
           >

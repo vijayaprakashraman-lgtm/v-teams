@@ -102,7 +102,7 @@ function ReminderModal({
           </div>
           <button
             type="button"
-            className="btn-close-modal"
+            className="btn-modal-close"
             onClick={onClose}
             aria-label="Close modal"
           >

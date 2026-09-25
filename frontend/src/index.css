@@ -41,18 +41,18 @@
 html.dark-theme,
 body.dark-theme,
 .dark-theme {
-  --bg-color: #121316;
-  --card-bg: #1a1c22;
-  --card-border: #2c2f38;
+  --bg-color: #111b21;
+  --card-bg: #202c33;
+  --card-border: #222d34;
   --primary-accent: #38bdf8;
   --primary-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --sidebar-bg: #121316;
-  --subpanel-bg: #1a1c22;
-  --stage-bg: #121316;
-  --hover-bg: #262932;
-  --active-bg: #323743;
+  --text-main: #e9edef;
+  --text-muted: #8696a0;
+  --sidebar-bg: #111b21;
+  --subpanel-bg: #111b21;
+  --stage-bg: #0b141a;
+  --hover-bg: #202c33;
+  --active-bg: #2a3942;
 }
 
 * {
@@ -106,10 +106,28 @@ body {
   background: #94a3b8;
 }
 
+.dark-theme ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+.dark-theme ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
 /* Smooth Focus & Interactive Standards */
 :focus-visible {
   outline: 2px solid var(--primary-accent);
   outline-offset: 2px;
+}
+
+/* Fix double border overlapping issue on form fields */
+input:focus,
+textarea:focus,
+select:focus,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none !important;
 }
 
 button, input, select, textarea {

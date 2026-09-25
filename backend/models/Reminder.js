@@ -33,6 +33,15 @@ const reminderSchema = new mongoose.Schema(
       enum: ['never', 'daily', 'weekly', 'monthly'],
       default: 'never',
     },
+    source: {
+      type: String,
+      enum: ['system', 'google_calendar'],
+      default: 'system',
+    },
+    googleEventId: {
+      type: String,
+      default: null,
+    },
     status: {
       type: String,
       enum: ['pending', 'completed', 'snoozed'],

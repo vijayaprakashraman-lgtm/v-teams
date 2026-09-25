@@ -271,7 +271,6 @@ function UserManagement({ currentAdminId }) {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <UsersIcon size={15} /> Members
           </span>
-          <span className="subnav-badge">{totalCount}</span>
         </button>
         <button
           type="button"
@@ -297,7 +296,7 @@ function UserManagement({ currentAdminId }) {
 
       {successMessage && (
         <div className="admin-alert-box alert-success">
-          <span>✓ {successMessage}</span>
+          <span>{successMessage}</span>
           <button type="button" className="btn-dismiss" onClick={() => setSuccessMessage(null)}>✕</button>
         </div>
       )}
@@ -306,8 +305,8 @@ function UserManagement({ currentAdminId }) {
       {subTab === 'members' && (
         <>
           {/* Control Bar: Search, Filters & Invite Employee */}
-          <div className="admin-control-bar">
-            <div className="admin-search-input-wrapper">
+          <div className="admin-control-bar" style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+            <div className="admin-search-input-wrapper" style={{ flex: 1 }}>
               <span className="search-icon">🔍</span>
               <input
                 type="text"
@@ -327,11 +326,12 @@ function UserManagement({ currentAdminId }) {
               onClick={() => {
                 setSubTab('invitations');
               }}
+              style={{ display: 'flex', alignItems: 'center', padding: '8px 20px', whiteSpace: 'nowrap' }}
             >
               + Invite Employee
             </button>
 
-            <div className="admin-filter-group">
+            <div className="admin-filter-group" style={{ display: 'flex', gap: '12px' }}>
               <select
                 className="admin-select"
                 value={roleFilter}
@@ -427,24 +427,25 @@ function UserManagement({ currentAdminId }) {
                         </td>
                         <td className="text-muted">{formatDate(u.createdAt)}</td>
                         <td className="text-right">
-                          {u.role === 'admin' && (
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            {u.role === 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => setPermModalUser(u)}
+                                style={{ background: 'rgba(14, 165, 233, 0.1)', border: '1px solid rgba(14, 165, 233, 0.2)', color: '#0ea5e9', cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', fontWeight: '600' }}
+                              >
+                                Permissions
+                              </button>
+                            )}
                             <button
                               type="button"
-                              className="btn-action-small btn-secondary"
-                              onClick={() => setPermModalUser(u)}
-                              style={{ marginRight: '6px' }}
+                              onClick={() => handleStatusChangePrompt(u)}
+                              disabled={isSelf || u.role === 'owner'}
+                              style={{ background: u.status === 'active' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', border: u.status === 'active' ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)', color: u.status === 'active' ? '#ef4444' : '#10b981', cursor: (isSelf || u.role === 'owner') ? 'not-allowed' : 'pointer', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', fontWeight: '600', opacity: (isSelf || u.role === 'owner') ? 0.5 : 1 }}
                             >
-                              Permissions
+                              {u.status === 'active' ? 'Deactivate' : 'Activate'}
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            className={`btn-action-small ${u.status === 'active' ? 'btn-warn' : 'btn-success'}`}
-                            onClick={() => handleStatusChangePrompt(u)}
-                            disabled={isSelf || u.role === 'owner'}
-                          >
-                            {u.status === 'active' ? 'Deactivate' : 'Activate'}
-                          </button>
+                          </div>
                         </td>
                       </tr>
                     );

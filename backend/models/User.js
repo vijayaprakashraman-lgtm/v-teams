@@ -52,9 +52,22 @@ const userSchema = new mongoose.Schema({
     ref: 'Organization',
     default: null,
   },
+  isSystemBot: {
+    type: Boolean,
+    default: false,
+  },
+  botType: {
+    type: String,
+    enum: ['reminder', 'calendar', 'system', 'none'],
+    default: 'none',
+  },
   lastSeenAt: {
     type: Date,
     default: null,
+  },
+  fcmTokens: {
+    type: [String],
+    default: [],
   },
   pinnedChats: [
     {

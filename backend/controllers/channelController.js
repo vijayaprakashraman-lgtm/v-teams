@@ -346,6 +346,18 @@ const joinChannel = async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       io.to(`company:${channel.organization}`).emit('channel:updated', { channel: populated });
+      
+      // Dispatch system message for public channel join
+      if (!channel.isPrivate && !alreadyMember) {
+        const { dispatchSystemBotMessage } = require('../services/botService');
+        dispatchSystemBotMessage({
+          botType: 'system',
+          content: `${req.user.name} joined the channel`,
+          channelId: channel._id,
+          organizationId: channel.organization,
+          io
+        }).catch(err => console.error('Error dispatching bot message:', err));
+      }
     }
 
     return res.status(200).json({
@@ -396,7 +408,7 @@ const addChannelMembers = async (req, res) => {
 
     // Permission check for private channels: only creator or admin
     const isCreator = channel.createdBy?.toString() === userId;
-    const isAdmin = userRole === 'admin';
+    const isAdmin = ['admin', 'owner', 'super_admin'].includes(userRole) || ['admin', 'owner', 'super_admin'].includes(req.user.globalRole);
     if (channel.isPrivate && !isCreator && !isAdmin) {
       return res.status(403).json({
         success: false,
@@ -431,9 +443,9 @@ const addChannelMembers = async (req, res) => {
       user: { $in: validIds },
       organization: channel.organization,
       status: 'active',
-    }).select('user');
+    }).populate('user', 'name');
 
-    const verifiedUserIds = activeMemberships.map((m) => m.user.toString());
+    const verifiedUserIds = activeMemberships.map((m) => m.user._id.toString());
     if (verifiedUserIds.length === 0) {
       return res.status(400).json({
         success: false,
@@ -451,6 +463,12 @@ const addChannelMembers = async (req, res) => {
         message: 'All selected users are already members of this channel',
       });
     }
+
+    // Get names of added users for system message
+    const addedNames = activeMemberships
+      .filter((m) => toAdd.includes(m.user._id.toString()))
+      .map((m) => m.user.name)
+      .join(', ');
 
     // Add new members
     channel.members.push(...toAdd);
@@ -484,6 +502,18 @@ const addChannelMembers = async (req, res) => {
         io.to(`user:${newUid}`).emit('channel:created', { channel: populated });
         io.to(`user:${newUid}`).emit('channel:updated', { channel: populated, addedUserIds: toAdd });
       });
+      
+      // Dispatch system message for private channel addition
+      if (channel.isPrivate) {
+        const { dispatchSystemBotMessage } = require('../services/botService');
+        dispatchSystemBotMessage({
+          botType: 'system',
+          content: `${req.user.name} added ${addedNames}`,
+          channelId: channel._id,
+          organizationId: channel.organization,
+          io
+        }).catch(err => console.error('Error dispatching bot message:', err));
+      }
     }
 
     return res.status(200).json({
@@ -754,31 +784,10 @@ const sendChannelMessage = async (req, res) => {
       const isOrgAdmin = ['admin', 'owner', 'super_admin'].includes(req.user.role) || ['admin', 'owner', 'super_admin'].includes(req.user.globalRole);
 
       if (!isCreator && !isChannelAdmin && !isOrgAdmin) {
-        if (!replyTo) {
-          return res.status(403).json({
-            success: false,
-            message: 'Only channel admins can send messages in this channel',
-          });
-        }
-
-        if (!mongoose.Types.ObjectId.isValid(replyTo)) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid reply message ID format',
-          });
-        }
-
-        const parentMessage = await Message.findOne({
-          _id: replyTo,
-          channelId: id,
+        return res.status(403).json({
+          success: false,
+          message: 'Only channel admins can send messages in this channel',
         });
-
-        if (!parentMessage) {
-          return res.status(400).json({
-            success: false,
-            message: 'Referenced message to reply to was not found in this channel',
-          });
-        }
       }
     }
 

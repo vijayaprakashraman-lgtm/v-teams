@@ -14,8 +14,8 @@ const ALL_PERMISSIONS = [
  * Must be mounted AFTER authMiddleware.protect
  */
 const adminOnly = (req, res, next) => {
-  // Check if req.user exists and has role 'owner' or 'admin'
-  if (!req.user || !['owner', 'admin'].includes(req.user.role)) {
+  // Check if req.user exists and has role 'owner', 'admin', or 'super_admin'
+  if (!req.user || !['owner', 'admin', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({
       success: false,
       message: 'Forbidden: Owner or Administrator privileges required',

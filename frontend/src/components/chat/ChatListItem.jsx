@@ -1,20 +1,24 @@
 import Avatar from '../common/Avatar';
-import { LockIcon, ChannelIcon, PinIcon, BellOffIcon } from '../common/Icons';
+import { LockIcon, ChannelIcon, PinIcon, BellOffIcon, AudioCallIcon, VideoCallIcon, BellIcon, CalendarIcon } from '../common/Icons';
 
-// Helper to format ISO dates into human-friendly time labels
 const formatChatTime = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
-  const now = new Date();
-  const isToday =
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear();
+  if (isNaN(date.getTime())) return '';
 
-  if (isToday) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const now = new Date();
+  
+  const dateMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const diffTime = nowMidnight.getTime() - dateMidnight.getTime();
+  const diffDays = Math.round(diffTime / 86400000);
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]}`;
 };
 
 function ChatListItem({
@@ -156,30 +160,43 @@ function ChatListItem({
             {displayName}
             {isMuted && <span className="mute-icon-indicator" title="Muted"><BellOffIcon size={14} color="var(--text-muted)" style={{ marginTop: '2px' }} /></span>}
           </span>
-          <span className="chat-item-time">{time}</span>
         </div>
 
         <div className="chat-item-footer">
-          <p className="chat-item-snippet">{snippet}</p>
-          <div className="chat-item-footer-right">
-            {unreadCount > 0 && (
-              <span className="unread-badge">{unreadCount}</span>
-            )}
-            {onTogglePin && (
-              <button
-                type="button"
-                className={`btn-pin-toggle ${isPinned ? 'is-pinned' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTogglePin();
-                }}
-                title={isPinned ? 'Unpin' : 'Pin to top'}
-                aria-label={isPinned ? 'Unpin' : 'Pin to top'}
-              >
-                <PinIcon size={12} strokeWidth={2.2} />
-              </button>
-            )}
-          </div>
+          <p className="chat-item-snippet">
+            {typeof snippet === 'string' && snippet.includes('📞') ? (
+              <span style={{ display: 'flex', alignItems: 'center' }}><AudioCallIcon size={14} style={{ marginRight: '4px' }} />{snippet.replace('📞 ', '')}</span>
+            ) : typeof snippet === 'string' && snippet.includes('📹') ? (
+              <span style={{ display: 'flex', alignItems: 'center' }}><VideoCallIcon size={14} style={{ marginRight: '4px' }} />{snippet.replace('📹 ', '')}</span>
+            ) : typeof snippet === 'string' && snippet.includes('🔔') ? (
+              <span style={{ display: 'flex', alignItems: 'center' }}><BellIcon size={14} color="#f59e0b" style={{ marginRight: '4px' }} />{snippet.replace('🔔 ', '')}</span>
+            ) : typeof snippet === 'string' && snippet.includes('📅') ? (
+              <span style={{ display: 'flex', alignItems: 'center' }}><CalendarIcon size={14} color="#10b981" style={{ marginRight: '4px' }} />{snippet.replace('📅 ', '')}</span>
+            ) : snippet}
+          </p>
+        </div>
+      </div>
+
+      <div className="chat-item-meta-right">
+        <span className="chat-item-time">{time}</span>
+        <div className="chat-item-badges">
+          {onTogglePin && (
+            <button
+              type="button"
+              className={`btn-pin-toggle ${isPinned ? 'is-pinned' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin();
+              }}
+              title={isPinned ? 'Unpin' : 'Pin to top'}
+              aria-label={isPinned ? 'Unpin' : 'Pin to top'}
+            >
+              <PinIcon size={12} strokeWidth={2.2} />
+            </button>
+          )}
+          {unreadCount > 0 && (
+            <span className="unread-badge">{unreadCount}</span>
+          )}
         </div>
       </div>
     </div>

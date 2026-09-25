@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+
 function AdminConfirmModal({
   isOpen,
   title = 'Confirm Action',
@@ -9,14 +11,14 @@ function AdminConfirmModal({
   onConfirm,
   onCancel,
 }) {
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div className="modal-backdrop" onClick={onCancel} role="dialog" aria-modal="true">
       <div
         className="modal-container admin-confirm-modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '440px', width: '90%', animation: 'modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', background: 'var(--card-bg, #ffffff)' }}
+        style={{ maxWidth: '440px', width: '90%', height: 'auto', minHeight: 'fit-content', borderRadius: '12px', overflow: 'hidden', animation: 'modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', background: 'var(--card-bg, #ffffff)', display: 'flex', flexDirection: 'column' }}
       >
         <div className="modal-header" style={{ padding: '18px 24px', borderBottom: '1px solid var(--card-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -88,7 +90,8 @@ function AdminConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

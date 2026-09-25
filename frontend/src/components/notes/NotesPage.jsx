@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getNotes, deleteNote } from '../../services/noteService';
 import NoteModal from './NoteModal';
-import { NoteIcon } from '../common/Icons';
+import { NoteIcon, EditIcon, TrashIcon } from '../common/Icons';
 import EmptyState from '../common/EmptyState';
 import ConfirmModal from '../admin/AdminConfirmModal';
 
@@ -77,11 +77,27 @@ function NotesPage() {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
+    
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
 
-    if (isToday) {
-      return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    if (diffMins < 1) {
+      return 'Just now';
     }
+    if (diffHours < 1) {
+      return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+    }
+    if (diffHours < 24 && date.getDate() === now.getDate()) {
+      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+
     return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -182,7 +198,7 @@ function NotesPage() {
               onClick={() => handleOpenEditModal(note)}
             >
               <div className="note-card-header">
-                <h3 className="note-card-title">{note.title || 'Untitled Note'}</h3>
+                <h3 className="note-card-title">{note.title || ''}</h3>
                 <div className="note-card-actions">
                   <button
                     type="button"
@@ -191,7 +207,7 @@ function NotesPage() {
                     title="Edit Note"
                     aria-label="Edit Note"
                   >
-                    ✏️
+                    <EditIcon size={16} />
                   </button>
                   <button
                     type="button"
@@ -203,7 +219,7 @@ function NotesPage() {
                     title="Delete Note"
                     aria-label="Delete Note"
                   >
-                    🗑️
+                    <TrashIcon size={16} />
                   </button>
                 </div>
               </div>

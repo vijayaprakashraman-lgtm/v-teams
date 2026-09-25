@@ -18,8 +18,7 @@ function AdminDashboard({ onBackToWorkspace }) {
   const [statsError, setStatsError] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-
-  const isAdmin = ['owner', 'admin'].includes(user?.role);
+  const isAdmin = ['owner', 'admin', 'super_admin'].includes(user?.role);
 
   const loadStats = useCallback(async () => {
     if (!isAdmin) return;
@@ -50,7 +49,7 @@ function AdminDashboard({ onBackToWorkspace }) {
           <span className="forbidden-icon">🚫</span>
           <h2>Access Denied</h2>
           <p>
-            You do not have administrator permissions to access the ChatApp Management Console.
+            You do not have administrator permissions to access the V Chat Management Console.
           </p>
           <button
             type="button"

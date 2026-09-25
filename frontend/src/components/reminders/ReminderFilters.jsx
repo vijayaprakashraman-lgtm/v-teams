@@ -22,14 +22,13 @@ function ReminderFilters({
           className={`filter-tab-btn ${activeFilter === 'all' ? 'active' : ''}`}
           onClick={() => onFilterChange('all')}
         >
-          All 
+          All
         </button>
         <button
           type="button"
           className={`filter-tab-btn ${activeFilter === 'pending' ? 'active' : ''}`}
           onClick={() => onFilterChange('pending')}
         >
-          <ClockIcon size={14} style={{ marginRight: 4 }} />
           Upcoming 
         </button>
         <button
@@ -37,7 +36,6 @@ function ReminderFilters({
           className={`filter-tab-btn ${activeFilter === 'completed' ? 'active' : ''}`}
           onClick={() => onFilterChange('completed')}
         >
-          <CheckIcon size={14} style={{ marginRight: 4 }} />
           Completed 
         </button>
       </div>

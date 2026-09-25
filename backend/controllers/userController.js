@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Membership = require('../models/Membership');
+const { sendPushToUser } = require('../services/pushNotificationService');
 
 // @desc    Get all registered team users in the active organization (excluding the logged-in user)
 // @route   GET /api/users
@@ -385,8 +386,70 @@ const unpinItem = async (req, res) => {
     console.error('Unpin Item Error:', error.message);
     return res.status(500).json({
       success: false,
-      message: 'Server error unpinning item',
     });
+  }
+};
+
+/**
+ * Register or update the FCM token for the authenticated user
+ * Route: POST /api/users/fcm-token
+ */
+const updateFcmToken = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { fcmToken } = req.body;
+
+    if (!fcmToken || typeof fcmToken !== 'string') {
+      return res.status(400).json({ success: false, message: 'FCM token is required' });
+    }
+
+    // Add token to the user's array using $addToSet to safely prevent duplicates
+    await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { fcmTokens: fcmToken } },
+      { new: true }
+    );
+
+    res.status(200).json({ success: true, message: 'FCM token registered successfully' });
+  } catch (error) {
+    console.error('Update FCM Token Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error updating FCM token' });
+  }
+};
+
+/**
+ * [TEMPORARY DEVELOPMENT ENDPOINT]
+ * Test sending an FCM push notification to the authenticated user's registered devices.
+ * Route: POST /api/users/test-fcm-push
+ */
+const testFcmPush = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Dispatch a data-only push notification to enforce deterministic background delivery
+    const result = await sendPushToUser(userId, {
+      data: {
+        title: 'V Chat Test',
+        body: 'FCM push notification is working!',
+      }
+    });
+
+    if (result && result.success) {
+      res.status(200).json({ 
+        success: true, 
+        message: 'Test FCM push dispatched.',
+        details: result 
+      });
+    } else {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Test FCM push failed to dispatch.',
+        error: result?.error || 'Unknown error'
+      });
+    }
+  } catch (error) {
+    console.error('Test FCM Push Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error dispatching test push notification' });
   }
 };
 
@@ -397,4 +460,6 @@ module.exports = {
   updateSettings,
   pinItem,
   unpinItem,
+  updateFcmToken,
+  testFcmPush,
 };

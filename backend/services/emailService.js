@@ -227,6 +227,13 @@ async function sendBrevoInvitationEmail({ toEmail, inviterName, companyName, acc
     htmlContent,
   };
 
+  console.log(`[DEBUG emailService] BREVO_API_KEY exists: ${!!apiKey}`);
+  if (apiKey) {
+    console.log(`[DEBUG emailService] BREVO_API_KEY length: ${apiKey.length}`);
+    console.log(`[DEBUG emailService] BREVO_API_KEY prefix: ${apiKey.substring(0, 8)}...`);
+  }
+  console.log(`[DEBUG emailService] BREVO_SENDER_EMAIL: ${senderEmail}`);
+
   const response = await fetch(BREVO_API_URL, {
     method: 'POST',
     headers: {
@@ -237,15 +244,34 @@ async function sendBrevoInvitationEmail({ toEmail, inviterName, companyName, acc
     body: JSON.stringify(payload),
   });
 
-  const responseData = await response.json().catch(() => ({}));
+  const responseText = await response.text();
+  console.log(`[DEBUG emailService] Brevo raw response status: ${response.status}`);
+  console.log(`[DEBUG emailService] Brevo raw response body: ${responseText}`);
+
+  let responseData = {};
+  try {
+    responseData = JSON.parse(responseText);
+  } catch (e) {
+    // Ignore JSON parse error for plain text responses
+  }
 
   if (!response.ok) {
     const errorDetail =
       responseData?.message ||
       responseData?.error ||
-      `HTTP error ${response.status} from Brevo API`;
+      `HTTP error ${response.status}`;
+      
+    const keyPrefix = apiKey ? `${apiKey.substring(0, 8)}...` : 'undefined';
+    const keyLength = apiKey ? apiKey.length : 0;
+    
     console.error('Brevo API email sending failed:', response.status, responseData);
-    throw new Error(`Brevo sending failed: ${errorDetail}`);
+    
+    // Throw an error with explicit diagnostic information for the user
+    throw new Error(
+      `Brevo API rejected the request. Details: [Status: ${response.status}] [Raw: ${responseText}] ` +
+      `[Key used length: ${keyLength}] [Key used prefix: ${keyPrefix}] ` +
+      `[Error Detail: ${errorDetail}]`
+    );
   }
 
   return {

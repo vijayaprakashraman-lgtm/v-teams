@@ -1,5 +1,25 @@
 import { LockIcon, ChannelIcon, PinIcon } from '../common/Icons';
 
+const formatChatTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  
+  const dateMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const diffTime = nowMidnight.getTime() - dateMidnight.getTime();
+  const diffDays = Math.round(diffTime / 86400000);
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]}`;
+};
+
 function ChannelItem({
   channel,
   isSelected,
@@ -12,6 +32,8 @@ function ChannelItem({
   const memberCount = Array.isArray(channel.members)
     ? channel.members.length
     : channel.memberCount || 0;
+
+  const time = formatChatTime(channel.lastMessageAt || channel.updatedAt || channel.createdAt);
 
   const handleJoinClick = (e) => {
     e.stopPropagation();
@@ -39,34 +61,48 @@ function ChannelItem({
       </div>
       <div className="channel-item-details">
         <div className="channel-name-row">
-          <span className="channel-name">{channel.name}</span>
-          {isPinned && (
-            <span className="pinned-badge-indicator" title="Pinned to top">
-              <PinIcon size={12} strokeWidth={2.2} />
-            </span>
-          )}
+          <span className="channel-name" style={{ display: 'flex', alignItems: 'center' }}>
+            {channel.name}
+            {isPinned && (
+              <span className="pinned-badge-indicator" title="Pinned to top" style={{ marginLeft: '6px' }}>
+                <PinIcon size={12} strokeWidth={2.2} />
+              </span>
+            )}
+          </span>
         </div>
         <div className="channel-desc-row">
-          <p className="channel-desc">{channel.description || 'Team discussion'}</p>
-          {channel.unread > 0 && !isDiscoverable && (
-            <span className="unread-badge">{channel.unread}</span>
-          )}
+          <p className="channel-desc">
+            {channel.lastMessage?.content
+              ? `${channel.lastMessage.sender?.name ? channel.lastMessage.sender.name.split(' ')[0] + ': ' : ''}${channel.lastMessage.content}`
+              : (channel.description || `${memberCount} member${memberCount === 1 ? '' : 's'}`)}
+          </p>
         </div>
       </div>
 
-      {!isDiscoverable && onTogglePin && (
-        <button
-          type="button"
-          className={`btn-pin-item ${isPinned ? 'pinned-active' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onTogglePin();
-          }}
-          title={isPinned ? 'Unpin channel' : 'Pin channel'}
-          aria-label={isPinned ? 'Unpin channel' : 'Pin channel'}
-        >
-          <PinIcon size={13} strokeWidth={2.2} />
-        </button>
+      {!isDiscoverable && (
+        <div className="chat-item-meta-right">
+          <span className="chat-item-time">{time}</span>
+          <div className="chat-item-badges">
+            {onTogglePin && (
+              <button
+                type="button"
+                className={`btn-pin-item ${isPinned ? 'pinned-active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePin();
+                }}
+                title={isPinned ? 'Unpin channel' : 'Pin channel'}
+                aria-label={isPinned ? 'Unpin channel' : 'Pin channel'}
+              >
+                <PinIcon size={13} strokeWidth={2.2} />
+              </button>
+            )}
+
+            {channel.unread > 0 && (
+              <span className="unread-badge">{channel.unread}</span>
+            )}
+          </div>
+        </div>
       )}
 
 

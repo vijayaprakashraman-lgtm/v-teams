@@ -177,11 +177,6 @@ function AddChannelMemberModal({
                   {channel.name}
                 </span>
               </div>
-              <p className="add-member-subtitle">
-                {channel.isPrivate
-                  ? 'Private channel • Invited teammates can view & send messages'
-                  : 'Add workspace teammates to this channel'}
-              </p>
             </div>
           </div>
           <button
@@ -343,7 +338,6 @@ function AddChannelMemberModal({
                       {/* User Info */}
                       <div className="user-row-info">
                         <span className="user-row-name">{u.name}</span>
-                        <span className="user-row-email">{u.email}</span>
                       </div>
 
                       {/* Status Tag */}

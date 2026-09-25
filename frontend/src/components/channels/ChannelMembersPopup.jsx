@@ -80,17 +80,9 @@ function ChannelMembersPopup({
             <div className="channel-members-title-group">
               <div className="channel-members-title-row">
                 <h3 id="channel-members-title" className="channel-members-title">
-                  #{channel.name} Members
+                  {channel.name} Members
                 </h3>
-                <span className="channel-members-count-pill" aria-label={`${members.length} members`}>
-                  {members.length}
-                </span>
               </div>
-              <p className="channel-members-subtitle">
-                {channel.isPrivate
-                  ? 'Private channel • Only invited members can view messages'
-                  : 'Public channel • Accessible to all workspace teammates'}
-              </p>
             </div>
           </div>
 
@@ -148,7 +140,9 @@ function ChannelMembersPopup({
         <div className="channel-members-body">
           {filteredMembers.length === 0 ? (
             <div className="channel-members-empty">
-              <span className="channel-members-empty-icon">🔍</span>
+              <span className="channel-members-empty-icon">
+                <SearchIcon size={40} color="var(--border-strong, #cbd5e1)" />
+              </span>
               <p className="channel-members-empty-text">
                 No members found matching &ldquo;{searchQuery}&rdquo;
               </p>
@@ -174,7 +168,6 @@ function ChannelMembersPopup({
                         name={memberName}
                         image={member.avatar}
                         size="small"
-                        status={isOnline ? 'online' : 'offline'}
                       />
                     </div>
 
@@ -182,20 +175,15 @@ function ChannelMembersPopup({
                       <div className="channel-member-name-row">
                         <span className="channel-member-name">{memberName}</span>
                         {isSelf && <span className="badge-you">(You)</span>}
-                        {isChannelCreator ? (
-                          <span className="channel-role-tag creator">Creator</span>
-                        ) : isChannelAdmin ? (
-                          <span className="channel-role-tag admin">Admin</span>
-                        ) : null}
+
                         {member.role === 'owner' && (
                           <span className="channel-role-tag owner">Owner</span>
                         )}
                       </div>
-                      <span className="channel-member-email">{member.email || 'No email available'}</span>
                     </div>
 
                     <div className="channel-member-presence">
-                      {currentUserIsAdmin && !isChannelCreator && !isChannelAdmin && onPromoteAdmin && (
+                      {currentUserIsAdmin && !isSelf && !isChannelCreator && !isChannelAdmin && onPromoteAdmin && (
                         <button
                           type="button"
                           className="btn-promote-admin"
@@ -206,10 +194,6 @@ function ChannelMembersPopup({
                           {promotingId === memberId ? 'Promoting...' : 'Make Admin'}
                         </button>
                       )}
-                      <span className={`channel-presence-pill ${isOnline ? 'online' : 'offline'}`}>
-                        <span className="presence-dot" />
-                        {isOnline ? 'Online' : 'Offline'}
-                      </span>
                     </div>
                   </div>
                 );
@@ -219,17 +203,7 @@ function ChannelMembersPopup({
         </div>
 
         {/* Modal Footer */}
-        <div className="channel-members-footer">
-          <div className="channel-members-summary">
-            <span>
-              {members.length} {members.length === 1 ? 'member' : 'members'}
-            </span>
-            <span className="summary-dot">•</span>
-            <span className="summary-online">
-              {onlineCount} {onlineCount === 1 ? 'is online' : 'are online'}
-            </span>
-          </div>
-
+        <div className="channel-members-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
             type="button"
             className="btn-secondary channel-members-btn-done"

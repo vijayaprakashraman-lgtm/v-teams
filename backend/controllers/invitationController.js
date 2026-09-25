@@ -477,6 +477,25 @@ const acceptInvitation = async (req, res) => {
             role: 'member',
           },
         });
+        
+        // 🤖 Trigger System Bot Notification to all existing members
+        const { dispatchSystemBotMessage } = require('../services/botService');
+        const activeMemberships = await Membership.find({ 
+          organization: invitation.organization._id, 
+          status: 'active',
+          user: { $ne: userId } // Exclude the new user
+        });
+        
+        const botPromises = activeMemberships.map(m => 
+          dispatchSystemBotMessage({
+            botType: 'system',
+            content: `👋 **New Member Joined!**\n\n${user?.name || userEmail} has successfully joined the ${orgName} workspace. Say hello!`,
+            userId: m.user.toString(),
+            organizationId: invitation.organization._id,
+            io
+          }).catch(e => console.error('Error sending bot welcome message', e))
+        );
+        await Promise.all(botPromises);
       }
     } catch (notifErr) {
       console.error('Failed to create acceptance notification:', notifErr.message);

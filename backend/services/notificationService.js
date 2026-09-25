@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Channel = require('../models/Channel');
 const Conversation = require('../models/Conversation');
 const Membership = require('../models/Membership');
+const { sendPushToUser } = require('./pushNotificationService');
 
 /**
  * Parse @mentions from text content and resolve against MongoDB Users
@@ -188,6 +189,17 @@ const notifyDirectMessage = async ({
         });
       }
 
+      // --- FCM Push Notification ---
+      sendPushToUser(recipientId, {
+        title: senderName,
+        body: truncated,
+        data: {
+          type: 'dm',
+          conversationId: String(conversationId),
+          messageId: String(messageId)
+        }
+      }).catch(err => console.error('FCM DM push error:', err));
+
       notifications.push(populated);
     }
 
@@ -274,15 +286,15 @@ const notifyChannelMessage = async ({
 
       let notifContent = '';
       if (isAll) {
-        notifContent = `${senderName} mentioned @all in #${channelName}`;
+        notifContent = `${senderName} mentioned @all in ${channelName}`;
       } else if (isMentioned) {
-        notifContent = `${senderName} mentioned you in #${channelName}`;
+        notifContent = `${senderName} mentioned you in ${channelName}`;
       } else if (content && content.trim()) {
-        notifContent = `New message in #${channelName} from ${senderName}`;
+        notifContent = `New message in ${channelName} from ${senderName}`;
       } else if (attachments && attachments.length > 0) {
-        notifContent = `${senderName} shared an attachment in #${channelName}`;
+        notifContent = `${senderName} shared an attachment in ${channelName}`;
       } else {
-        notifContent = `New activity in #${channelName} from ${senderName}`;
+        notifContent = `New activity in ${channelName} from ${senderName}`;
       }
 
       const notification = await Notification.create({
@@ -314,6 +326,18 @@ const notifyChannelMessage = async ({
           unreadCount,
         });
       }
+
+      // --- FCM Push Notification ---
+      const pushBody = content ? content.slice(0, 100) : (attachments.length > 0 ? 'Shared an attachment' : 'New message');
+      sendPushToUser(memberId, {
+        title: notifContent,
+        body: pushBody,
+        data: {
+          type: 'channel',
+          channelId: String(channelDoc._id),
+          messageId: String(messageId)
+        }
+      }).catch(err => console.error('FCM Channel push error:', err));
 
       notifications.push(populated);
     }

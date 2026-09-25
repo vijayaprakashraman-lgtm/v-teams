@@ -47,6 +47,7 @@ import { markConversationAsRead, updateConversationSetting } from '../../service
 import { getPinnedMessages, pinMessage, unpinMessage } from '../../services/pinnedMessageService';
 import { getSavedMessages, saveMessage, unsaveMessage } from '../../services/savedMessageService';
 import { pinItem, unpinItem } from '../../services/pinService';
+import { registerFCMToken } from '../../services/settingsService';
 
 import {
   getChannels,
@@ -62,6 +63,9 @@ import {
 } from '../../services/channelService';
 
 import { createTodo } from '../../services/todoService';
+
+import { messaging } from '../../config/firebase';
+import { getToken, onMessage } from 'firebase/messaging';
 
 // Helper to detect if a conversation is a self-conversation for the current user
 const isSelfConversation = (conv, userId) => {
@@ -199,6 +203,53 @@ function AppLayout() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const handleFcmNavigation = (e) => {
+      const data = e.detail || e.data;
+      if (!data) return;
+      if (data.type === 'channel' && data.channelId) {
+        setActiveTab('channels');
+        setChannels(prev => {
+          const ch = prev.find(c => (c._id || c.id)?.toString() === data.channelId);
+          if (ch) {
+            setSelectedChannel(ch);
+          } else {
+            setSelectedChannel({ _id: data.channelId });
+          }
+          return prev;
+        });
+      } else if (data.type === 'dm' && data.conversationId) {
+        setActiveTab('chats');
+        setConversations(prev => {
+          const cv = prev.find(c => (c._id || c.id)?.toString() === data.conversationId);
+          if (cv) {
+            setSelectedChat(cv);
+          } else {
+            setSelectedChat({ _id: data.conversationId });
+          }
+          return prev;
+        });
+      }
+    };
+    
+    window.addEventListener('fcm-notification-click', handleFcmNavigation);
+    const handleServiceWorkerMessage = (e) => {
+      if (e.data && e.data.type === 'fcm-notification-click') {
+        handleFcmNavigation({ detail: e.data.data });
+      }
+    };
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
+    return () => {
+      window.removeEventListener('fcm-notification-click', handleFcmNavigation);
+      if (navigator.serviceWorker) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
   }, []);
 
   // Handle "Add to Calendar" from TodoItem or other sources
@@ -454,6 +505,74 @@ function AppLayout() {
       loadConversations();
     }
   }, [activeTab, loadContacts, loadChannels, loadConversations]);
+
+  // Firebase Cloud Messaging (FCM) Token Generation
+  useEffect(() => {
+    if (!user) return;
+
+    const requestFCMToken = async () => {
+      try {
+        // Do not request if the user explicitly denied permissions previously
+        if (Notification.permission === 'denied') {
+          console.log('[FCM] Notification permission is denied.');
+          return;
+        }
+
+        // Register the service worker with the dynamic Vite environment variables
+        const swUrl = `/firebase-messaging-sw.js?apiKey=${import.meta.env.VITE_FIREBASE_API_KEY}&projectId=${import.meta.env.VITE_FIREBASE_PROJECT_ID}&messagingSenderId=${import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID}&appId=${import.meta.env.VITE_FIREBASE_APP_ID}&authDomain=${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}&storageBucket=${import.meta.env.VITE_FIREBASE_STORAGE_BUCKET}`;
+        const registration = await navigator.serviceWorker.register(swUrl);
+
+        // Retrieve the FCM registration token (prompts the user if permission is 'default')
+        const currentToken = await getToken(messaging, { 
+          vapidKey: import.meta.env.VITE_VAPID_PUBLIC_KEY, 
+          serviceWorkerRegistration: registration 
+        });
+
+        if (currentToken) {
+          // Log the token only for development/testing
+          console.log('[FCM Integration] Generated Registration Token:', currentToken);
+          
+          // Send to backend if it's new/changed for THIS specific user
+          const cacheKey = `fcm_token_${user._id}`;
+          const cachedToken = localStorage.getItem(cacheKey);
+          if (cachedToken !== currentToken) {
+            try {
+              await registerFCMToken(currentToken);
+              localStorage.setItem(cacheKey, currentToken);
+              console.log('[FCM Integration] Token successfully registered with backend.');
+            } catch (apiErr) {
+              console.error('[FCM Integration] Failed to register token with backend:', apiErr.message);
+            }
+          }
+          
+          // Set up foreground message handler
+          onMessage(messaging, (payload) => {
+            console.log('[FCM Integration] Received foreground message:', payload);
+            if (Notification.permission === 'granted') {
+              const notificationTitle = payload.notification?.title || payload.data?.title || 'New Message';
+              const notificationOptions = {
+                body: payload.notification?.body || payload.data?.body || '',
+                icon: '/favicon.ico',
+                data: payload.data
+              };
+              const n = new Notification(notificationTitle, notificationOptions);
+              n.onclick = function() {
+                window.focus();
+                window.dispatchEvent(new CustomEvent('fcm-notification-click', { detail: payload.data }));
+                this.close();
+              };
+            }
+          });
+        } else {
+          console.log('[FCM Integration] No registration token available.');
+        }
+      } catch (err) {
+        console.error('[FCM Integration] An error occurred while retrieving token:', err);
+      }
+    };
+
+    requestFCMToken();
+  }, [user]);
 
   // 4. Socket Conversation Room Management
   useEffect(() => {
@@ -715,25 +834,34 @@ function AppLayout() {
     const handleChannelUpdated = ({ channel, leftUserId, addedUserIds }) => {
       if (!channel) return;
       const chanId = (channel._id || channel.id)?.toString();
+      
+      const isMember = channel.members?.some(
+        (m) => (m._id || m.id || m)?.toString() === currentUserId?.toString()
+      );
+      const shouldBeVisible = isMember || !channel.isPrivate;
+
       setChannels((prev) => {
         const exists = prev.some((c) => (c._id || c.id)?.toString() === chanId);
         if (exists) {
+          if (!shouldBeVisible) {
+            return prev.filter((c) => (c._id || c.id)?.toString() !== chanId);
+          }
           return prev.map((c) => ((c._id || c.id)?.toString() === chanId ? { ...c, ...channel } : c));
         }
         // If current user is now in the channel members, add it to channel list in real time!
-        const isMember = channel.members?.some(
-          (m) => (m._id || m.id || m)?.toString() === currentUserId?.toString()
-        );
-        if (isMember || !channel.isPrivate) {
+        if (shouldBeVisible) {
           return [channel, ...prev];
         }
         return prev;
       });
-      setSelectedChannel((prev) =>
-        prev && (prev._id || prev.id)?.toString() === chanId
-          ? { ...prev, ...channel }
-          : prev
-      );
+      
+      setSelectedChannel((prev) => {
+        if (prev && (prev._id || prev.id)?.toString() === chanId) {
+          if (!shouldBeVisible) return null;
+          return { ...prev, ...channel };
+        }
+        return prev;
+      });
     };
 
     const handleChannelDeleted = ({ channelId }) => {
@@ -1422,6 +1550,8 @@ function AppLayout() {
     }
   };
 
+
+
   // 10. Send Channel Message (supports text, file attachments, replyTo, and polls)
   const handleSendChannelMessage = async (content, files = [], replyTo = null) => {
     if (isPlanDisabled) return;
@@ -1815,10 +1945,10 @@ function AppLayout() {
   };
 
   // 11. Create Channel Handler
-  const handleCreateChannel = async ({ name, description, isPrivate }) => {
+  const handleCreateChannel = async ({ name, description, isPrivate, isAdminOnly }) => {
     if (isPlanDisabled) return;
     try {
-      const data = await createChannel({ name, description, isPrivate });
+      const data = await createChannel({ name, description, isPrivate, isAdminOnly });
       if (data.success && data.channel) {
         const newChan = data.channel;
         setActiveTab('channels');

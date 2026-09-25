@@ -35,7 +35,7 @@ function TodoFilters({
       <div className="todo-filter-controls">
         {/* Status Filter */}
         <div className="filter-select-wrapper">
-          <label htmlFor="todo-status-filter" className="sr-only">
+          <label htmlFor="todo-status-filter" className="todo-filter-label">
             Status
           </label>
           <select
@@ -52,10 +52,11 @@ function TodoFilters({
 
         {/* Priority Filter */}
         <div className="filter-select-wrapper">
-          <label htmlFor="todo-priority-filter" className="sr-only">
+          <label htmlFor="todo-priority-filter" className="todo-filter-label">
             Priority
           </label>
           <select
+
             id="todo-priority-filter"
             className="todo-filter-select"
             value={priorityFilter}

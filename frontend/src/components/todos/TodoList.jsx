@@ -48,7 +48,7 @@ function TodoList({
             ? 'Try searching with different keywords or clearing your active filters.'
             : activeView === 'my'
             ? 'When tasks are assigned to you by teammates or created for yourself, they will appear here.'
-            : 'Organize team projects, track deliverables, and manage action items right inside ChatApp.'}
+            : 'Organize team projects, track deliverables, and manage action items right inside V Chat.'}
         </p>
         {!searchQuery && (
           <button
@@ -73,7 +73,6 @@ function TodoList({
         <section className="todo-section">
           <div className="todo-section-header">
             <span className="section-title">Pending</span>
-            <span className="section-count-badge">{pendingTodos.length}</span>
           </div>
           <div className="todo-cards-grid">
             {pendingTodos.map((todo) => (
@@ -108,9 +107,6 @@ function TodoList({
               </span>
               <span className="section-title">Completed</span>
             </div>
-            <span className="section-count-badge completed-badge">
-              {completedTodos.length}
-            </span>
           </div>
 
           {isCompletedExpanded && (

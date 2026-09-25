@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider, useSocket } from './context/SocketContext';
 import { CallProvider } from './context/CallContext';
+import { LiveKitProvider } from './context/LiveKitContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { SettingsProvider } from './context/SettingsContext';
 import AppLayout from './components/layout/AppLayout';
+import LiveKitCallOverlay from './components/calling/LiveKitCallOverlay';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -610,11 +612,14 @@ function MainApp() {
     return (
       <SocketProvider>
         <CallProvider>
-          <NotificationProvider>
-            <SettingsProvider>
-              <AppLayout />
-            </SettingsProvider>
-          </NotificationProvider>
+          <LiveKitProvider>
+            <NotificationProvider>
+              <SettingsProvider>
+                <AppLayout />
+                <LiveKitCallOverlay />
+              </SettingsProvider>
+            </NotificationProvider>
+          </LiveKitProvider>
         </CallProvider>
       </SocketProvider>
     );

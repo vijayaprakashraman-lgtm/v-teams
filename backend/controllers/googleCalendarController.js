@@ -4,6 +4,7 @@ const {
   getGoogleEmail,
   verifyStateToken,
   getAuthenticatedCalendarClient,
+  syncUpcomingEventsToReminders,
 } = require("../services/googleCalendarService");
 const GoogleCalendarToken = require("../models/GoogleCalendarToken");
 
@@ -112,7 +113,7 @@ const googleCallback = async (req, res) => {
     const googleEmail = await getGoogleEmail(tokens.access_token);
 
     // 5. Upsert the token record in MongoDB
-    //    If the user re-connects, update existing record
+    // 5. Save the token and sync initial events
     await GoogleCalendarToken.findOneAndUpdate(
       { user: userId },
       {
@@ -124,6 +125,27 @@ const googleCallback = async (req, res) => {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    
+    // Fire and forget event sync
+    syncUpcomingEventsToReminders(userId).catch(e => console.error("Initial sync error:", e.message));
+
+    // Dispatch welcome message from Google Calendar Bot
+    try {
+      const User = require('../models/User');
+      const { dispatchSystemBotMessage } = require('../services/botService');
+      const userDoc = await User.findById(userId).select('currentOrganization');
+      if (userDoc && userDoc.currentOrganization) {
+        await dispatchSystemBotMessage({
+          botType: 'calendar',
+          userId: userId,
+          content: `Successfully connected to Google Calendar (${googleEmail}). I will notify you here 10 minutes before your upcoming events, and at the exact time they start!`,
+          organizationId: userDoc.currentOrganization,
+          io: req.app.get('io'),
+        });
+      }
+    } catch (botErr) {
+      console.error("Error dispatching calendar welcome message:", botErr.message);
+    }
 
     // 6. Redirect back to the frontend with a success signal
     //    The frontend reads this query param and updates UI state
@@ -265,6 +287,23 @@ const createEvent = async (req, res) => {
       success: true,
       event: response.data,
     });
+
+    try {
+      const User = require('../models/User');
+      const { dispatchSystemBotMessage } = require('../services/botService');
+      const userDoc = await User.findById(req.user.id).select('currentOrganization');
+      if (userDoc && userDoc.currentOrganization) {
+        await dispatchSystemBotMessage({
+          botType: 'calendar',
+          userId: req.user.id,
+          content: `You have created an event: ${summary}`,
+          organizationId: userDoc.currentOrganization,
+          io: req.app.get('io'),
+        });
+      }
+    } catch (botErr) {
+      console.error("Error dispatching calendar event creation message:", botErr.message);
+    }
   } catch (err) {
     console.error("Error creating event:", err.message);
     res.status(500).json({ success: false, message: "Could not create event." });
@@ -290,6 +329,23 @@ const updateEvent = async (req, res) => {
       success: true,
       event: response.data,
     });
+
+    try {
+      const User = require('../models/User');
+      const { dispatchSystemBotMessage } = require('../services/botService');
+      const userDoc = await User.findById(req.user.id).select('currentOrganization');
+      if (userDoc && userDoc.currentOrganization) {
+        await dispatchSystemBotMessage({
+          botType: 'calendar',
+          userId: req.user.id,
+          content: `Event updated: ${summary}`,
+          organizationId: userDoc.currentOrganization,
+          io: req.app.get('io'),
+        });
+      }
+    } catch (botErr) {
+      console.error("Error dispatching calendar event update message:", botErr.message);
+    }
   } catch (err) {
     console.error("Error updating event:", err.message);
     res.status(500).json({ success: false, message: "Could not update event." });

@@ -88,7 +88,7 @@ function ReminderItem({
           <div className="reminder-badges">
             {isCompleted && (
               <span className="reminder-badge badge-completed">
-                <CheckIcon size={12} style={{ marginRight: 3 }} /> Completed
+                Completed
               </span>
             )}
             {isSnoozed && !isCompleted && (

@@ -3,7 +3,7 @@ import Avatar from '../common/Avatar';
 import ReactionBar from './ReactionBar';
 import EmojiPicker from './EmojiPicker';
 import PollCard from './PollCard';
-import { TodoIcon, BookmarkIcon, PinIcon, AudioCallIcon, VideoCallIcon } from '../common/Icons';
+import { TodoIcon, BookmarkIcon, PinIcon, AudioCallIcon, VideoCallIcon, BellIcon, CalendarIcon } from '../common/Icons';
 
 // Format message timestamp
 const formatMessageTime = (dateString) => {
@@ -167,6 +167,41 @@ const renderMessageContent = (text) => {
         : part.slice(4, -5);
       return <em key={i}>{renderFormattedInline(inner, `i-${i}`)}</em>;
     }
+    
+    // Replace bot emojis with SVGs
+    if (typeof part === 'string') {
+      if (part.includes('🔔')) {
+        const partsWithIcon = part.split('🔔');
+        return (
+          <span key={i}>
+            {partsWithIcon.map((p, idx) => (
+              <span key={idx}>
+                {p}
+                {idx < partsWithIcon.length - 1 && (
+                  <BellIcon size={16} color="#f59e0b" style={{ marginRight: '4px', verticalAlign: 'text-bottom', display: 'inline-block' }} />
+                )}
+              </span>
+            ))}
+          </span>
+        );
+      }
+      if (part.includes('📅')) {
+        const partsWithIcon = part.split('📅');
+        return (
+          <span key={i}>
+            {partsWithIcon.map((p, idx) => (
+              <span key={idx}>
+                {p}
+                {idx < partsWithIcon.length - 1 && (
+                  <CalendarIcon size={16} color="#10b981" style={{ marginRight: '4px', verticalAlign: 'text-bottom', display: 'inline-block' }} />
+                )}
+              </span>
+            ))}
+          </span>
+        );
+      }
+    }
+    
     return part;
   });
 };
@@ -249,11 +284,27 @@ function MessageBubble({
     }
   }, [isEditing, message.content]);
 
-  const getFileUrl = (url) => {
+  const getFileUrl = (url, download = false, filename = '') => {
     if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
-    return `${backendUrl}${url}`;
+    let finalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
+      finalUrl = `${backendUrl.replace(/\/$/, '')}${url}`;
+    }
+    const token = sessionStorage.getItem('chatapp_token');
+    
+    // Construct query parameters
+    const urlObj = new URL(finalUrl, window.location.origin);
+    if (token && finalUrl.includes('/uploads/') && !urlObj.searchParams.has('token')) {
+      urlObj.searchParams.append('token', token);
+    }
+    if (download) {
+      urlObj.searchParams.append('download', '1');
+      if (filename) {
+        urlObj.searchParams.append('filename', filename);
+      }
+    }
+    return urlObj.toString();
   };
 
   const handleCopy = async () => {
@@ -537,7 +588,14 @@ function MessageBubble({
 
         {/* Delete Confirmation Modal Overlay */}
         {showDeleteConfirm && (
-          <div className="delete-confirm-popover">
+          <div 
+            className="delete-confirm-popover"
+            style={{
+              [isOwn ? 'right' : 'left']: 0,
+              [isOwn ? 'left' : 'right']: 'auto',
+              zIndex: 9999
+            }}
+          >
             <p className="delete-confirm-title">Delete Message Options</p>
             <div className="delete-confirm-actions" style={{ flexDirection: 'column', gap: '6px' }}>
               {onDeleteForMe && (
@@ -635,7 +693,7 @@ function MessageBubble({
                   handleCancelEdit();
                 }
               }}
-              rows={2}
+              rows={1}
               disabled={editLoading}
             />
             <div className="inline-edit-buttons">
@@ -676,13 +734,13 @@ function MessageBubble({
 
                   // Case A: Image Attachment
                   if (isImage) {
+                    const downloadUrl = getFileUrl(att.fileUrl, true, att.fileName);
                     return (
                       <div key={`${att.fileUrl}-${idx}`} className="message-image-wrapper">
                         <a
                           href={fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
                           className="image-attachment-link"
+                          target="_self"
                         >
                           <img
                             src={fileUrl}
@@ -691,12 +749,36 @@ function MessageBubble({
                             loading="lazy"
                           />
                         </a>
+                        <a
+                          href={downloadUrl}
+                          download={att.fileName}
+                          className="image-download-btn"
+                          title={`Download ${att.fileName}`}
+                          aria-label={`Download ${att.fileName}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            width="16"
+                            height="16"
+                          >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                        </a>
                       </div>
                     );
                   }
 
                   // Case B: Video Attachment (Level 11 Native HTML5 Player)
                   if (isVideo) {
+                    const downloadUrl = getFileUrl(att.fileUrl, true, att.fileName);
                     return (
                       <div key={`${att.fileUrl}-${idx}`} className="message-video-wrapper">
                         <video
@@ -717,10 +799,8 @@ function MessageBubble({
                             </span>
                           </div>
                           <a
-                            href={fileUrl}
+                            href={downloadUrl}
                             download={att.fileName}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="btn-video-download"
                             title={`Download ${att.fileName}`}
                             aria-label={`Download ${att.fileName}`}
@@ -744,22 +824,25 @@ function MessageBubble({
                   }
 
                   // Case C: General Document / PDF
+                  const downloadUrl = getFileUrl(att.fileUrl, true, att.fileName);
+                  const isPdf = rawExt === 'pdf' || att.fileType === 'application/pdf';
+                  
                   return (
                     <div key={`${att.fileUrl}-${idx}`} className="message-file-card">
-                      <div className="file-card-icon-badge">{extBadge}</div>
-                      <div className="file-card-details">
-                        <span className="file-card-name" title={att.fileName}>
-                          {att.fileName}
-                        </span>
-                        <span className="file-card-size">
-                          {formatFileSize(att.fileSize)}
-                        </span>
-                      </div>
+                      <a href={fileUrl} target="_self" className="file-card-preview-link" style={{ display: 'flex', alignItems: 'center', flex: 1, textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
+                        <div className="file-card-icon-badge">{extBadge}</div>
+                        <div className="file-card-details" style={{ overflow: 'hidden' }}>
+                          <span className="file-card-name" title={att.fileName} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                            {att.fileName}
+                          </span>
+                          <span className="file-card-size">
+                            {formatFileSize(att.fileSize)}
+                          </span>
+                        </div>
+                      </a>
                       <a
-                        href={fileUrl}
+                        href={downloadUrl}
                         download={att.fileName}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="btn-file-download"
                         title={`Download ${att.fileName}`}
                         aria-label={`Download ${att.fileName}`}

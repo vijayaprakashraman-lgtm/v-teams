@@ -82,11 +82,27 @@ function MessageManagement() {
       : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const getFileUrl = (url) => {
+  const getFileUrl = (url, download = false, filename = '') => {
     if (!url) return '#';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
-    return `${backendUrl}${url}`;
+    let finalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
+      finalUrl = `${backendUrl.replace(/\/$/, '')}${url}`;
+    }
+    const token = sessionStorage.getItem('chatapp_token');
+    
+    // Construct query parameters
+    const urlObj = new URL(finalUrl, window.location.origin);
+    if (token && finalUrl.includes('/uploads/') && !urlObj.searchParams.has('token')) {
+      urlObj.searchParams.append('token', token);
+    }
+    if (download) {
+      urlObj.searchParams.append('download', '1');
+      if (filename) {
+        urlObj.searchParams.append('filename', filename);
+      }
+    }
+    return urlObj.toString();
   };
 
   return (
@@ -147,7 +163,7 @@ function MessageManagement() {
 
       {successMessage && (
         <div className="admin-alert-box alert-success">
-          <span>✓ {successMessage}</span>
+          <span>{successMessage}</span>
           <button type="button" className="btn-dismiss" onClick={() => setSuccessMessage(null)}>✕</button>
         </div>
       )}
@@ -218,11 +234,11 @@ function MessageManagement() {
                             return (
                               <a
                                 key={idx}
-                                href={getFileUrl(att.fileUrl)}
-                                target="_blank"
-                                rel="noreferrer"
+                                href={getFileUrl(att.fileUrl, true, att.fileName)}
+                                target="_self"
                                 className={`admin-file-link-pill ${isVid ? 'admin-video-link-pill' : ''}`}
                                 title={`Download ${att.fileName}`}
+                                download={att.fileName}
                               >
                                 {isVid ? '🎥' : '📎'} {att.fileName}
                               </a>

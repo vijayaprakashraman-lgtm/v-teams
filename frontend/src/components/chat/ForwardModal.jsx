@@ -32,6 +32,13 @@ function ForwardModal({
       (m) => (m._id || m.id || m)?.toString() === currentUserId?.toString()
     );
     if (!isMember) return false;
+    
+    if (ch.isAdminOnly) {
+      const isCreator = (ch.createdBy?._id || ch.createdBy?.id || ch.createdBy)?.toString() === currentUserId?.toString();
+      const isAdmin = ch.admins?.some((a) => (a._id || a.id || a)?.toString() === currentUserId?.toString());
+      if (!isCreator && !isAdmin) return false;
+    }
+    
     return ch.name?.toLowerCase().includes(searchQuery.toLowerCase().trim());
   });
 

@@ -106,7 +106,7 @@ function OrganizationSettings() {
 
       {successMessage && (
         <div className="admin-alert-box alert-success">
-          <span>✓ {successMessage}</span>
+          <span>{successMessage}</span>
           <button type="button" className="btn-dismiss" onClick={() => setSuccessMessage(null)}>✕</button>
         </div>
       )}
@@ -295,10 +295,6 @@ function OrganizationSettings() {
             </div>
           </div>
         )}
-
-        <div className="admin-settings-footer-info">
-          <span>💡 Changes take effect immediately across all active users via live WebSocket dispatch and backend API security layers.</span>
-        </div>
       </div>
     </div>
   );

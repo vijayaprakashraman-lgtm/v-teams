@@ -71,9 +71,9 @@ function AdminSidebar({ activeTab, onSelectTab, onBackToWorkspace, isMobileOpen 
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           </svg>
         </div>
-        <div className="brand-text">
-          <span className="brand-title">Admin Console</span>
-          <span className="brand-subtitle">Workspace Governance</span>
+        <div className="brand-text" style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+          <span className="brand-title" style={{ background: 'none', color: 'var(--text-main)', WebkitTextFillColor: 'var(--text-main)', fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Admin Console</span>
+          <span className="brand-subtitle" style={{ color: 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Workspace Governance</span>
         </div>
         {onCloseMobile && (
           <button
@@ -116,7 +116,7 @@ function AdminSidebar({ activeTab, onSelectTab, onBackToWorkspace, isMobileOpen 
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </span>
-          <span className="nav-label">Back to ChatApp</span>
+          <span className="nav-label">Back to V Chat</span>
         </button>
       </div>
     </aside>

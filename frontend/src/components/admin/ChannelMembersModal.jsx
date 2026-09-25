@@ -127,7 +127,7 @@ function ChannelMembersModal({ isOpen, channel, onClose, onMembersUpdated }) {
             </div>
             <div className="role-modal-title-group">
               <h3 id="channel-members-modal-title" className="role-modal-title">
-                Members of #{channel.name}
+                Members of {channel.name}
               </h3>
               <p className="role-modal-subtitle">
                 Manage members and access for this channel
@@ -147,7 +147,7 @@ function ChannelMembersModal({ isOpen, channel, onClose, onMembersUpdated }) {
         {/* Modal Body */}
         <div className="role-modal-body">
           {error && <div className="role-modal-alert"><span>⚠️ {error}</span></div>}
-          {success && <div className="role-modal-alert alert-success" style={{ backgroundColor: 'rgba(22,163,74,0.1)', color: '#16a34a', borderBottomColor: 'rgba(22,163,74,0.2)' }}><span>✓ {success}</span></div>}
+          {success && <div className="role-modal-alert alert-success" style={{ backgroundColor: 'rgba(22,163,74,0.1)', color: '#16a34a', borderBottomColor: 'rgba(22,163,74,0.2)' }}><span>{success}</span></div>}
 
           {/* Add Member Search Section */}
           <div className="add-member-section" style={{ marginBottom: '24px' }}>

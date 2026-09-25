@@ -754,8 +754,8 @@ function SuperAdminDashboard() {
                       </div>
                       <div className="sa-plan-card-price">
                         <span className="sa-price-currency">₹</span>
-                        <span className="sa-price-amount">199</span>
-                        <span className="sa-price-period">/mo</span>
+                        <span className="sa-price-amount">100</span>
+                        <span className="sa-price-period"> / month</span>
                       </div>
                       <div className="sa-plan-card-features">
                         <div className="sa-plan-feature">
