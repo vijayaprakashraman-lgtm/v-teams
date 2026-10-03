@@ -212,6 +212,38 @@ function ChatWindow({
                   </button>
                 </>
               )}
+              {!otherUserForCall && chat.participants?.length > 2 && (
+                <>
+                  <button
+                    type="button"
+                    className="btn-icon-action"
+                    title="Group Voice Call"
+                    aria-label="Group Voice Call"
+                    onClick={() => {
+                      const event = new CustomEvent('join-livekit-call', { 
+                        detail: { roomId: chat._id || chat.id, conversationId: chat._id || chat.id, isGroup: true, contextName: displayName, isInitiating: true, audioOnly: true } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    <AudioCallIcon size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon-action"
+                    title="Group Video Call"
+                    aria-label="Group Video Call"
+                    onClick={() => {
+                      const event = new CustomEvent('join-livekit-call', { 
+                        detail: { roomId: chat._id || chat.id, conversationId: chat._id || chat.id, isGroup: true, contextName: displayName, isInitiating: true, audioOnly: false } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    <VideoCallIcon size={18} />
+                  </button>
+                </>
+              )}
               {onCreateTodo && !isPlanDisabled && (
                 <button
                   type="button"

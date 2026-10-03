@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Avatar from '../common/Avatar';
-import { LockIcon, ChannelIcon, PinIcon } from '../common/Icons';
+import { LockIcon, ChannelIcon, PinIcon, AudioCallIcon, VideoCallIcon } from '../common/Icons';
 import MessageList from '../chat/MessageList';
 import MessageInput from '../chat/MessageInput';
 import InChatSearch from '../chat/InChatSearch';
@@ -31,6 +31,7 @@ function ChannelWindow({
   onAddMembers = null,
   availableUsers = [],
   userRole = 'user',
+  globalRole = 'user',
   onTyping,
   onStopTyping,
   typingUser = null,
@@ -112,14 +113,14 @@ function ChannelWindow({
       (channel.createdBy?._id || channel.createdBy?.id || channel.createdBy)?.toString() ===
         currentUserId?.toString() ||
       ['admin', 'owner', 'super_admin'].includes(userRole) ||
-      ['admin', 'owner', 'super_admin'].includes(user?.globalRole)
+      ['admin', 'owner', 'super_admin'].includes(globalRole)
   );
 
   // Check if user has permission to manage channel
   const canManage = Boolean(
     isChannelAdmin ||
     ['admin', 'owner', 'super_admin'].includes(userRole) ||
-    ['admin', 'owner', 'super_admin'].includes(user?.globalRole) ||
+    ['admin', 'owner', 'super_admin'].includes(globalRole) ||
     (channel.createdBy && (channel.createdBy._id || channel.createdBy.id || channel.createdBy).toString() === currentUserId?.toString())
   );
 
@@ -219,23 +220,39 @@ function ChannelWindow({
             <div className="chat-header-actions">
               {/* Start/Join LiveKit Group Call */}
               {isMember && (
-                <button
-                  type="button"
-                  className="btn-icon-action"
-                  title={`Video Call in #${channel.name}`}
-                  aria-label="Video Call"
-                  onClick={() => {
-                    const event = new CustomEvent('join-livekit-call', { 
-                      detail: { roomId: channelId, channelId: channelId, isGroup: true, contextName: channel.name, isInitiating: true } 
-                    });
-                    window.dispatchEvent(event);
-                  }}
-                >
+                <>
+                  <button
+                    type="button"
+                    className="btn-icon-action"
+                    title={`Voice Call in #${channel.name}`}
+                    aria-label="Voice Call"
+                    onClick={() => {
+                      const event = new CustomEvent('join-livekit-call', { 
+                        detail: { roomId: channelId, channelId: channelId, isGroup: true, contextName: channel.name, isInitiating: true, audioOnly: true } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
+                    <AudioCallIcon size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon-action"
+                    title={`Video Call in #${channel.name}`}
+                    aria-label="Video Call"
+                    onClick={() => {
+                      const event = new CustomEvent('join-livekit-call', { 
+                        detail: { roomId: channelId, channelId: channelId, isGroup: true, contextName: channel.name, isInitiating: true, audioOnly: false } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                  >
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="23 7 16 12 23 17 23 7" />
                     <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                   </svg>
                 </button>
+                </>
               )}
               {/* Add To-Do Shortcut */}
               {onCreateTodo && !isPlanDisabled && (

@@ -1537,7 +1537,7 @@ function AppLayout() {
         });
       }
     } catch (err) {
-      console.error('Failed to send message:', err.message);
+      console.error('Failed to send message:', err.message, err.response?.data);
       if (err.response?.data?.code === 'ORG_EXPIRED' || err.response?.data?.companyStatus === 'expired') {
         setLiveStatus('expired');
       } else if (err.response?.data?.code === 'ORG_SUSPENDED' || err.response?.data?.companyStatus === 'suspended') {
@@ -1598,7 +1598,7 @@ function AppLayout() {
         });
       }
     } catch (err) {
-      console.error('Failed to send channel message:', err.message);
+      console.error('Failed to send channel message:', err.message, err.response?.data);
       if (err.response?.data?.code === 'ORG_EXPIRED' || err.response?.data?.companyStatus === 'expired') {
         setLiveStatus('expired');
       } else if (err.response?.data?.code === 'ORG_SUSPENDED' || err.response?.data?.companyStatus === 'suspended') {
@@ -2706,6 +2706,7 @@ function AppLayout() {
                     onPromoteAdmin={handlePromoteChannelAdmin}
                     availableUsers={contacts}
                     userRole={user?.role}
+                    globalRole={user?.globalRole}
                     onTyping={() => currentChannelId && emitChannelTyping(currentChannelId)}
                     onStopTyping={() => currentChannelId && emitChannelStopTyping(currentChannelId)}
                     typingUser={formatTypingUsers(channelTypingMap[currentChannelId])}
@@ -2756,6 +2757,7 @@ function AppLayout() {
                     onPromoteAdmin={handlePromoteChannelAdmin}
                     availableUsers={contacts}
                     userRole={user?.role}
+                    globalRole={user?.globalRole}
                     onTyping={() => currentChannelId && emitChannelTyping(currentChannelId)}
                     onStopTyping={() => currentChannelId && emitChannelStopTyping(currentChannelId)}
                     typingUser={formatTypingUsers(channelTypingMap[currentChannelId])}

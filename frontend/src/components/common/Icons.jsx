@@ -466,3 +466,22 @@ export const VideoOffIcon = ({ size = 18, color = 'currentColor', strokeWidth = 
 
 
 
+
+export const PlayIcon = ({ size = 18, color = 'currentColor', strokeWidth = 2, className, style }) => (
+  <SvgIcon size={size} color={color} strokeWidth={strokeWidth} className={className} style={style}>
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </SvgIcon>
+);
+
+export const PauseIcon = ({ size = 18, color = 'currentColor', strokeWidth = 2, className, style }) => (
+  <SvgIcon size={size} color={color} strokeWidth={strokeWidth} className={className} style={style}>
+    <rect x="6" y="4" width="4" height="16" />
+    <rect x="14" y="4" width="4" height="16" />
+  </SvgIcon>
+);
+
+export const StopIcon = ({ size = 18, color = 'currentColor', strokeWidth = 2, className, style }) => (
+  <SvgIcon size={size} color={color} strokeWidth={strokeWidth} className={className} style={style}>
+    <rect x="6" y="6" width="12" height="12" />
+  </SvgIcon>
+);

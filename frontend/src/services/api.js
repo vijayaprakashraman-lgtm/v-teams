@@ -31,7 +31,11 @@ api.interceptors.request.use(
     }
     // For FormData payloads, remove Content-Type so the browser/axios attaches multipart boundary automatically
     if (config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
+      if (config.headers && typeof config.headers.delete === 'function') {
+        config.headers.delete('Content-Type');
+      } else if (config.headers) {
+        delete config.headers['Content-Type'];
+      }
     }
     return config;
   },

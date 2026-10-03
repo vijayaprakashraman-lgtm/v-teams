@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Channel = require('../models/Channel');
+const Membership = require('../models/Membership');
 
 let ioInstance = null;
 
@@ -11,6 +12,9 @@ const userConnections = new Map();
 
 // Map to track active WebRTC call sessions: Map<sessionKey, sessionData>
 const activeCalls = new Map();
+
+// Map to track active LiveKit call sessions
+const activeLiveKitCalls = new Map();
 
 /**
  * Record a call history message in MongoDB and broadcast to conversation participants
@@ -147,7 +151,7 @@ const initSocket = (io) => {
       const currentCount = userConnections.get(connectionKey) || 0;
       userConnections.set(connectionKey, currentCount + 1);
 
-      if (currentCount === 0) {
+      if (currentCount === 0 && socket.user.settings?.privacy?.onlineStatus !== false) {
         io.to(`company:${targetOrgId}`).emit('user:online', {
           userId,
           userName: socket.user.name,
@@ -155,13 +159,14 @@ const initSocket = (io) => {
       }
 
       try {
-        const Membership = require('../models/Membership');
         const orgMemberships = await Membership.find({
           organization: targetOrgId,
           status: 'active',
-        }).select('user');
+        }).populate('user');
         
-        const orgMemberIds = orgMemberships.map((m) => m.user.toString());
+        const orgMemberIds = orgMemberships
+          .filter((m) => m.user && m.user.settings?.privacy?.onlineStatus !== false)
+          .map((m) => m.user._id.toString());
         const onlineUserIdsInOrg = orgMemberIds.filter(uid => (userConnections.get(`${uid}_${targetOrgId}`) || 0) > 0);
         
         socket.emit('users:online', {
@@ -179,7 +184,11 @@ const initSocket = (io) => {
       
       if (remaining <= 0) {
         userConnections.delete(connectionKey);
-        io.to(`company:${targetOrgId}`).emit('user:offline', { userId, lastSeenAt: new Date() });
+        
+        io.to(`company:${targetOrgId}`).emit('user:offline', { 
+           userId, 
+           lastSeenAt: socket.user.settings?.privacy?.lastSeen === false ? null : new Date() 
+        });
       } else {
         userConnections.set(connectionKey, remaining);
       }
@@ -394,6 +403,16 @@ const initSocket = (io) => {
               });
             }
           }
+
+          // Cleanup active LiveKit calls for this user
+          for (const [roomId, session] of activeLiveKitCalls.entries()) {
+            if (session.users && session.users.has(userId)) {
+              session.users.delete(userId);
+              if (session.users.size === 0) {
+                activeLiveKitCalls.delete(roomId);
+              }
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching sockets on disconnect:', err.message);
@@ -543,20 +562,7 @@ const initSocket = (io) => {
     socket.on('livekit:invite', async (data) => {
       // data: { inviteeId, roomId, contextName, channelId, conversationId }
       if (data.inviteeId) {
-        const CallInvitation = require('../models/CallInvitation');
         try {
-          // Save invitation to DB
-          await CallInvitation.findOneAndUpdate(
-            { invitee: data.inviteeId, roomId: data.roomId },
-            { 
-              inviter: userId,
-              contextName: data.contextName,
-              status: 'pending',
-              createdAt: new Date()
-            },
-            { upsert: true, new: true }
-          );
-
           // Emit to invitee
           io.to(`user:${data.inviteeId}`).emit('livekit:incoming_invite', {
             inviterId: userId,
@@ -567,6 +573,28 @@ const initSocket = (io) => {
             channelId: data.channelId,
             conversationId: data.conversationId,
           });
+
+          try {
+            const { sendPushToUser } = require('./pushNotificationService');
+            const callTypeLabel = data.audioOnly ? 'Audio' : 'Video';
+            await sendPushToUser(data.inviteeId, {
+              title: `Incoming ${callTypeLabel} Call`,
+              body: `From ${socket.user.name}`,
+              data: {
+                type: 'call',
+                callType: data.audioOnly ? 'audio' : 'video',
+                callerId: String(userId),
+                callerName: String(socket.user.name || 'Caller'),
+                callerAvatar: String(socket.user.avatar || ''),
+                roomId: String(data.roomId || ''),
+                conversationId: String(data.conversationId || ''),
+                channelId: String(data.channelId || ''),
+              }
+            });
+            console.log(`[CALL PUSH] Dispatched LiveKit video call push to user ${data.inviteeId}`);
+          } catch (pushErr) {
+            console.error('[CALL PUSH ERROR]', pushErr.message);
+          }
         } catch (err) {
           console.error('Error saving LiveKit invitation:', err.message);
         }
@@ -576,12 +604,9 @@ const initSocket = (io) => {
     socket.on('livekit:accept', async (data) => {
       // data: { inviterId, roomId }
       if (data.roomId) {
-        const CallInvitation = require('../models/CallInvitation');
         try {
-          await CallInvitation.findOneAndUpdate(
-            { invitee: userId, roomId: data.roomId, status: 'pending' },
-            { status: 'accepted' }
-          );
+          // Future: log acceptance
+
         } catch (err) {
           console.error('Error accepting LiveKit invitation:', err.message);
         }
@@ -591,13 +616,9 @@ const initSocket = (io) => {
     socket.on('livekit:decline', async (data) => {
       // data: { inviterId, roomId }
       if (data.roomId) {
-        const CallInvitation = require('../models/CallInvitation');
         try {
-          await CallInvitation.findOneAndUpdate(
-            { invitee: userId, roomId: data.roomId, status: 'pending' },
-            { status: 'declined' }
-          );
-          
+          // Future: log decline
+
           if (data.inviterId) {
             io.to(`user:${data.inviterId}`).emit('livekit:declined', {
               inviteeId: userId,
@@ -610,10 +631,22 @@ const initSocket = (io) => {
         }
       }
     });
-    socket.on('livekit:start_channel_call', async (data) => {
-      // data: { channelId, roomId, contextName }
+    socket.on('livekit:start_channel_call', async (data, callback) => {
       if (data.channelId) {
+        // Enforce authoritative call type for active session
+        if (!activeLiveKitCalls.has(data.roomId)) {
+          activeLiveKitCalls.set(data.roomId, { callType: !!data.audioOnly, users: new Set() });
+        }
+        const session = activeLiveKitCalls.get(data.roomId);
+        session.users.add(userId);
+        data.audioOnly = session.callType;
+
+        if (typeof callback === 'function') {
+          callback({ audioOnly: data.audioOnly });
+        }
+
         const Channel = require('../models/Channel');
+        const Message = require('../models/Message');
         try {
           const channel = await Channel.findById(data.channelId);
           if (channel) {
@@ -627,12 +660,80 @@ const initSocket = (io) => {
                   roomId: data.roomId,
                   contextName: data.contextName,
                   channelId: data.channelId,
+                  audioOnly: data.audioOnly,
+                });
+              }
+            });
+
+            // Log the group call as a system message in the channel
+            const newMessage = await Message.create({
+              organization: socket.user.currentOrganization,
+              channelId: channel._id,
+              sender: userId,
+              messageType: 'call',
+              call: {
+                callType: data.audioOnly ? 'audio' : 'video',
+                status: 'started',
+                duration: 0
+              }
+            });
+
+            await newMessage.populate('sender', 'name avatar email');
+            io.to(`channel:${channel._id}`).emit('channel:message:new', { message: newMessage });
+          }
+        } catch (err) {
+          console.error('Error starting channel call:', err.message);
+        }
+      }
+    });
+
+    socket.on('livekit:start_group_call', async (data, callback) => {
+      // data: { conversationId, roomId, contextName, audioOnly }
+      if (data.conversationId) {
+        // Enforce authoritative call type for active session
+        if (!activeLiveKitCalls.has(data.roomId)) {
+          activeLiveKitCalls.set(data.roomId, { callType: !!data.audioOnly, users: new Set() });
+        }
+        const session = activeLiveKitCalls.get(data.roomId);
+        session.users.add(userId);
+        data.audioOnly = session.callType;
+
+        if (typeof callback === 'function') {
+          callback({ audioOnly: data.audioOnly });
+        }
+
+        const Conversation = require('../models/Conversation');
+        try {
+          const conversation = await Conversation.findById(data.conversationId);
+          if (conversation && conversation.participants) {
+            conversation.participants.forEach(memberId => {
+              if (memberId.toString() !== userId) {
+                io.to(`user:${memberId.toString()}`).emit('livekit:incoming_invite', {
+                  inviterId: userId,
+                  inviterName: socket.user.name,
+                  inviterAvatar: socket.user.avatar,
+                  roomId: data.roomId,
+                  contextName: data.contextName,
+                  conversationId: data.conversationId,
+                  audioOnly: data.audioOnly,
                 });
               }
             });
           }
         } catch (err) {
-          console.error('Error starting channel call:', err.message);
+          console.error('Error starting group call:', err.message);
+        }
+      }
+    });
+
+    socket.on('livekit:leave_call', (data) => {
+      if (data.roomId && activeLiveKitCalls.has(data.roomId)) {
+        const session = activeLiveKitCalls.get(data.roomId);
+        if (session.users) {
+          session.users.delete(userId);
+          if (session.users.size === 0) {
+            activeLiveKitCalls.delete(data.roomId);
+          }
         }
       }
     });

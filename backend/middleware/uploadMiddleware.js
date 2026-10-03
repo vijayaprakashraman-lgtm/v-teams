@@ -66,21 +66,30 @@ const fileFilter = (req, file, cb) => {
     );
   }
 
-  // B. If video file extension is used, validate allowed video MIME type
-  if (ALLOWED_VIDEO_EXTENSIONS.has(ext)) {
+  // B. Validation for ambiguous extensions (e.g., .webm can be audio or video)
+  if (ext === '.webm') {
+    if (file.mimetype !== 'video/webm' && file.mimetype !== 'audio/webm') {
+      return cb(
+        new Error(`Invalid MIME type "${file.mimetype}" for extension ".webm". Allowed: video/webm, audio/webm.`),
+        false
+      );
+    }
+  } 
+  // C. For other video extensions, validate strictly against video MIME types
+  else if (ALLOWED_VIDEO_EXTENSIONS.has(ext)) {
     if (!ALLOWED_VIDEO_MIMES.has(file.mimetype)) {
       return cb(
         new Error(
-          `Invalid video MIME type "${file.mimetype}" for extension "${ext}". Allowed: MP4, WebM, MOV.`
+          `Invalid video MIME type "${file.mimetype}" for extension "${ext}". Allowed: MP4, MOV.`
         ),
         false
       );
     }
   }
 
-  // C. If video MIME type is used, validate allowed video extension
+  // D. If video MIME type is used, validate allowed video extension
   if (file.mimetype.startsWith('video/')) {
-    if (!ALLOWED_VIDEO_EXTENSIONS.has(ext) || !ALLOWED_VIDEO_MIMES.has(file.mimetype)) {
+    if (ext !== '.webm' && (!ALLOWED_VIDEO_EXTENSIONS.has(ext) || !ALLOWED_VIDEO_MIMES.has(file.mimetype))) {
       return cb(
         new Error(
           'Unsupported video format. Please upload MP4 (.mp4), WebM (.webm), or MOV (.mov).'
