@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Channel = require('../models/Channel');
+const Membership = require('../models/Membership');
 
 let ioInstance = null;
 
@@ -11,6 +12,9 @@ const userConnections = new Map();
 
 // Map to track active WebRTC call sessions: Map<sessionKey, sessionData>
 const activeCalls = new Map();
+
+// Map to track active LiveKit call sessions
+const activeLiveKitCalls = new Map();
 
 /**
  * Record a call history message in MongoDB and broadcast to conversation participants
@@ -399,6 +403,16 @@ const initSocket = (io) => {
               });
             }
           }
+
+          // Cleanup active LiveKit calls for this user
+          for (const [roomId, session] of activeLiveKitCalls.entries()) {
+            if (session.users && session.users.has(userId)) {
+              session.users.delete(userId);
+              if (session.users.size === 0) {
+                activeLiveKitCalls.delete(roomId);
+              }
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching sockets on disconnect:', err.message);
@@ -562,12 +576,13 @@ const initSocket = (io) => {
 
           try {
             const { sendPushToUser } = require('./pushNotificationService');
+            const callTypeLabel = data.audioOnly ? 'Audio' : 'Video';
             await sendPushToUser(data.inviteeId, {
-              title: `Incoming Video Call`,
+              title: `Incoming ${callTypeLabel} Call`,
               body: `From ${socket.user.name}`,
               data: {
                 type: 'call',
-                callType: 'video',
+                callType: data.audioOnly ? 'audio' : 'video',
                 callerId: String(userId),
                 callerName: String(socket.user.name || 'Caller'),
                 callerAvatar: String(socket.user.avatar || ''),
@@ -616,8 +631,20 @@ const initSocket = (io) => {
         }
       }
     });
-    socket.on('livekit:start_channel_call', async (data) => {
+    socket.on('livekit:start_channel_call', async (data, callback) => {
       if (data.channelId) {
+        // Enforce authoritative call type for active session
+        if (!activeLiveKitCalls.has(data.roomId)) {
+          activeLiveKitCalls.set(data.roomId, { callType: !!data.audioOnly, users: new Set() });
+        }
+        const session = activeLiveKitCalls.get(data.roomId);
+        session.users.add(userId);
+        data.audioOnly = session.callType;
+
+        if (typeof callback === 'function') {
+          callback({ audioOnly: data.audioOnly });
+        }
+
         const Channel = require('../models/Channel');
         const Message = require('../models/Message');
         try {
@@ -633,6 +660,7 @@ const initSocket = (io) => {
                   roomId: data.roomId,
                   contextName: data.contextName,
                   channelId: data.channelId,
+                  audioOnly: data.audioOnly,
                 });
               }
             });
@@ -644,7 +672,7 @@ const initSocket = (io) => {
               sender: userId,
               messageType: 'call',
               call: {
-                callType: 'video',
+                callType: data.audioOnly ? 'audio' : 'video',
                 status: 'started',
                 duration: 0
               }
@@ -694,6 +722,18 @@ const initSocket = (io) => {
           }
         } catch (err) {
           console.error('Error starting group call:', err.message);
+        }
+      }
+    });
+
+    socket.on('livekit:leave_call', (data) => {
+      if (data.roomId && activeLiveKitCalls.has(data.roomId)) {
+        const session = activeLiveKitCalls.get(data.roomId);
+        if (session.users) {
+          session.users.delete(userId);
+          if (session.users.size === 0) {
+            activeLiveKitCalls.delete(data.roomId);
+          }
         }
       }
     });
