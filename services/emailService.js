@@ -18,7 +18,7 @@ async function sendBrevoInvitationEmail({ toEmail, inviterName, companyName, acc
   }
 
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'abhiikumar1330@gmail.com';
-  const senderName = process.env.BREVO_SENDER_NAME || 'ChatApp Workspace';
+  const senderName = process.env.BREVO_SENDER_NAME || 'V-Teams Workspace';
 
   const expiryString = expiresAt
     ? new Date(expiresAt).toLocaleDateString(undefined, {
