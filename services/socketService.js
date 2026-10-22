@@ -635,7 +635,12 @@ const initSocket = (io) => {
       if (data.channelId) {
         // Enforce authoritative call type for active session
         if (!activeLiveKitCalls.has(data.roomId)) {
-          activeLiveKitCalls.set(data.roomId, { callType: !!data.audioOnly, users: new Set() });
+          activeLiveKitCalls.set(data.roomId, {
+            callType: !!data.audioOnly,
+            channelId: data.channelId,
+            conversationId: null,
+            users: new Set(),
+          });
         }
         const session = activeLiveKitCalls.get(data.roomId);
         session.users.add(userId);
@@ -647,21 +652,39 @@ const initSocket = (io) => {
 
         const Channel = require('../models/Channel');
         const Message = require('../models/Message');
+        const { sendPushToUser } = require('./pushNotificationService');
         try {
           const channel = await Channel.findById(data.channelId);
           if (channel) {
-            // Emit incoming invite to all channel members except the caller
+            const callTypeLabel = data.audioOnly ? 'Audio' : 'Video';
+            // Emit incoming invite & push notification to all channel members except caller
             channel.members.forEach(memberId => {
-              if (memberId.toString() !== userId) {
-                io.to(`user:${memberId.toString()}`).emit('livekit:incoming_invite', {
+              const memIdStr = memberId.toString();
+              if (memIdStr !== userId) {
+                io.to(`user:${memIdStr}`).emit('livekit:incoming_invite', {
                   inviterId: userId,
                   inviterName: socket.user.name,
                   inviterAvatar: socket.user.avatar,
                   roomId: data.roomId,
-                  contextName: data.contextName,
+                  contextName: data.contextName || channel.name,
                   channelId: data.channelId,
                   audioOnly: data.audioOnly,
                 });
+
+                sendPushToUser(memIdStr, {
+                  title: `Incoming ${callTypeLabel} Call in #${channel.name}`,
+                  body: `From ${socket.user.name}`,
+                  data: {
+                    type: 'call',
+                    callType: data.audioOnly ? 'audio' : 'video',
+                    callerId: String(userId),
+                    callerName: String(socket.user.name || 'Caller'),
+                    callerAvatar: String(socket.user.avatar || ''),
+                    roomId: String(data.roomId || ''),
+                    channelId: String(data.channelId || ''),
+                    channelName: String(channel.name || ''),
+                  }
+                }).catch(err => console.error('[CHANNEL CALL PUSH ERROR]', err.message));
               }
             });
 
@@ -692,7 +715,12 @@ const initSocket = (io) => {
       if (data.conversationId) {
         // Enforce authoritative call type for active session
         if (!activeLiveKitCalls.has(data.roomId)) {
-          activeLiveKitCalls.set(data.roomId, { callType: !!data.audioOnly, users: new Set() });
+          activeLiveKitCalls.set(data.roomId, {
+            callType: !!data.audioOnly,
+            channelId: null,
+            conversationId: data.conversationId,
+            users: new Set(),
+          });
         }
         const session = activeLiveKitCalls.get(data.roomId);
         session.users.add(userId);
@@ -703,20 +731,38 @@ const initSocket = (io) => {
         }
 
         const Conversation = require('../models/Conversation');
+        const { sendPushToUser } = require('./pushNotificationService');
         try {
           const conversation = await Conversation.findById(data.conversationId);
           if (conversation && conversation.participants) {
+            const callTypeLabel = data.audioOnly ? 'Audio' : 'Video';
             conversation.participants.forEach(memberId => {
-              if (memberId.toString() !== userId) {
-                io.to(`user:${memberId.toString()}`).emit('livekit:incoming_invite', {
+              const memIdStr = memberId.toString();
+              if (memIdStr !== userId) {
+                io.to(`user:${memIdStr}`).emit('livekit:incoming_invite', {
                   inviterId: userId,
                   inviterName: socket.user.name,
                   inviterAvatar: socket.user.avatar,
                   roomId: data.roomId,
-                  contextName: data.contextName,
+                  contextName: data.contextName || conversation.name,
                   conversationId: data.conversationId,
                   audioOnly: data.audioOnly,
                 });
+
+                sendPushToUser(memIdStr, {
+                  title: `Incoming ${callTypeLabel} Call`,
+                  body: `From ${socket.user.name}`,
+                  data: {
+                    type: 'call',
+                    callType: data.audioOnly ? 'audio' : 'video',
+                    callerId: String(userId),
+                    callerName: String(socket.user.name || 'Caller'),
+                    callerAvatar: String(socket.user.avatar || ''),
+                    roomId: String(data.roomId || ''),
+                    conversationId: String(data.conversationId || ''),
+                    isGroup: 'true',
+                  }
+                }).catch(err => console.error('[GROUP CALL PUSH ERROR]', err.message));
               }
             });
           }
@@ -733,6 +779,9 @@ const initSocket = (io) => {
           session.users.delete(userId);
           if (session.users.size === 0) {
             activeLiveKitCalls.delete(data.roomId);
+            if (session.channelId) {
+              io.emit('channel:call:ended', { channelId: session.channelId, roomId: data.roomId });
+            }
           }
         }
       }

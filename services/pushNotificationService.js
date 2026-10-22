@@ -1,4 +1,4 @@
-const { isInitialized } = require('../config/firebaseAdmin');
+﻿const { isInitialized } = require('../config/firebaseAdmin');
 const { getMessaging } = require('firebase-admin/messaging');
 const User = require('../models/User');
 
@@ -35,6 +35,53 @@ const sendPushToUser = async (userId, payload) => {
         stringData[key] = val != null ? String(val) : '';
       }
       message.data = stringData;
+    }
+
+    const isCallNotification = payload.data?.type === 'call' ||
+                               payload.data?.type === 'incoming_call' ||
+                               payload.data?.callType != null;
+
+    if (isCallNotification) {
+      message.android = {
+        priority: 'high',
+        ttl: 45 * 1000, // 45 seconds timeout for calls
+        notification: {
+          channelId: 'v_chat_calls_v2',
+          priority: 'max',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+        },
+      };
+      message.apns = {
+        headers: {
+          'apns-priority': '10',
+          'apns-expiration': String(Math.floor(Date.now() / 1000) + 45),
+        },
+        payload: {
+          aps: {
+            alert: {
+              title: payload.title || 'Incoming Call',
+              body: payload.body || 'Incoming call',
+            },
+            sound: 'default',
+            contentAvailable: true,
+          },
+        },
+      };
+    } else {
+      message.android = {
+        priority: 'high',
+        notification: {
+          channelId: 'v_chat_messages_v2',
+        },
+      };
+      message.apns = {
+        payload: {
+          aps: {
+            sound: 'default',
+          },
+        },
+      };
     }
 
     const response = await getMessaging().sendEachForMulticast(message);
