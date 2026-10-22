@@ -223,7 +223,7 @@ async function sendBrevoInvitationEmail({ toEmail, inviterName, companyName, acc
         email: toEmail,
       },
     ],
-    subject: `You've been invited to join ${companyName} on ChatApp`,
+    subject: `You've been invited to join ${companyName} on V-Teams`,
     htmlContent,
   };
 

@@ -146,5 +146,5 @@ server.on('error', (err) => {
 
 // Start the HTTP and WebSocket Server listening on all interfaces (0.0.0.0)
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 ChatApp Backend server running on http://localhost:${PORT} with Socket.IO enabled`);
+  console.log(`🚀 V-Teams Backend server running on http://localhost:${PORT} with Socket.IO enabled`);
 });
