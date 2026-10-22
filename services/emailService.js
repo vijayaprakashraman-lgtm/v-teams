@@ -215,7 +215,7 @@ async function sendBrevoInvitationEmail({ toEmail, inviterName, companyName, acc
 
   const payload = {
     sender: {
-      name: senderName,
+      name: displaySenderName,
       email: senderEmail,
     },
     to: [
