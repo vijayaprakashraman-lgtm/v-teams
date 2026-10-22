@@ -441,6 +441,26 @@ const initSocket = (io) => {
           callType: data.callType,
           conversationId: data.conversationId,
         });
+
+        try {
+          const { sendPushToUser } = require('./pushNotificationService');
+          const callTypeLabel = (data.callType === 'video') ? 'Video' : 'Audio';
+          sendPushToUser(data.receiverId, {
+            title: `Incoming ${callTypeLabel} Call`,
+            body: `From ${socket.user.name}`,
+            data: {
+              type: 'call',
+              callType: data.callType === 'video' ? 'video' : 'audio',
+              callerId: String(userId),
+              callerName: String(socket.user.name || 'Caller'),
+              callerAvatar: String(socket.user.avatar || ''),
+              roomId: String(data.roomId || `call_${userId}_${data.receiverId}`),
+              conversationId: String(data.conversationId || ''),
+            }
+          }).catch(err => console.error('[CALL PUSH ERROR]', err.message));
+        } catch (pushErr) {
+          console.error('[CALL PUSH ERROR]', pushErr.message);
+        }
       }
     });
 

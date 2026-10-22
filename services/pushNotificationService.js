@@ -22,13 +22,6 @@ const sendPushToUser = async (userId, payload) => {
       tokens: user.fcmTokens,
     };
 
-    if (payload.title || payload.body) {
-      message.notification = {
-        title: payload.title || 'New Notification',
-        body: payload.body || '',
-      };
-    }
-
     if (payload.data && Object.keys(payload.data).length > 0) {
       const stringData = {};
       for (const [key, val] of Object.entries(payload.data)) {
@@ -42,33 +35,36 @@ const sendPushToUser = async (userId, payload) => {
                                payload.data?.callType != null;
 
     if (isCallNotification) {
+      // DATA-ONLY message for calls!
+      // Do NOT set message.notification! Setting message.notification causes Android OS
+      // system tray to automatically pop a generic passive message notification banner
+      // ("New message") and skips onMessageReceived when the app is in recent/closed state.
+      // Data-only messages wake up onMessageReceived/MyFirebaseMessagingService which launches
+      // the high-priority full-screen incoming call UI with Ringtone and Answer/Decline buttons.
       message.android = {
         priority: 'high',
         ttl: 45 * 1000, // 45 seconds timeout for calls
-        notification: {
-          channelId: 'v_chat_calls_v2',
-          priority: 'max',
-          defaultSound: true,
-          defaultVibrateTimings: true,
-        },
       };
       message.apns = {
         headers: {
           'apns-priority': '10',
+          'apns-push-type': 'background',
           'apns-expiration': String(Math.floor(Date.now() / 1000) + 45),
         },
         payload: {
           aps: {
-            alert: {
-              title: payload.title || 'Incoming Call',
-              body: payload.body || 'Incoming call',
-            },
-            sound: 'default',
             contentAvailable: true,
           },
         },
       };
     } else {
+      // Standard messages include notification payload
+      if (payload.title || payload.body) {
+        message.notification = {
+          title: payload.title || 'New Notification',
+          body: payload.body || '',
+        };
+      }
       message.android = {
         priority: 'high',
         notification: {
