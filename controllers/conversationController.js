@@ -366,13 +366,26 @@ const markConversationRead = async (req, res) => {
           {
             $set: {
               isRead: true,
+              isDelivered: true,
+              deliveredTo: {
+                $concatArrays: [
+                  {
+                    $filter: {
+                      input: { $ifNull: ['$deliveredTo', []] },
+                      as: 'deliv',
+                      cond: { $ne: ['$deliv.userId', new mongoose.Types.ObjectId(userId)] },
+                    },
+                  },
+                  [{ userId: new mongoose.Types.ObjectId(userId), deliveredAt: readAt }],
+                ],
+              },
               readBy: {
                 $concatArrays: [
                   {
                     $filter: {
                       input: { $ifNull: ['$readBy', []] },
                       as: 'reader',
-                      cond: { $ne: ['$$reader.userId', new mongoose.Types.ObjectId(userId)] },
+                      cond: { $ne: ['$reader.userId', new mongoose.Types.ObjectId(userId)] },
                     },
                   },
                   [{ userId: new mongoose.Types.ObjectId(userId), readAt }],
@@ -406,7 +419,14 @@ const markConversationRead = async (req, res) => {
 
       const io = req.app.get('io');
       if (io) {
-        io.to(`conversation:${conversationId}`).emit('message:read', { conversationId, messageIds: unreadIds, userId, readAt });
+        const rooms = [`conversation:${conversationId}`];
+        for (const p of conversation.participants || []) {
+          const pid = (p._id || p).toString();
+          if (pid !== userId) {
+            rooms.push(`user:${pid}`);
+          }
+        }
+        io.to(rooms).emit('message:read', { conversationId, messageIds: unreadIds, userId, readAt });
 
         // Emit real-time notification read sync
         matchedNotifs.forEach((n) => {
@@ -668,7 +688,10 @@ const sendMessage = async (req, res) => {
       attachments,
       poll,
       replyTo: replyTo && mongoose.Types.ObjectId.isValid(replyTo) ? replyTo : null,
+      isDelivered: isSelf ? true : false,
+      deliveredTo: isSelf ? [{ userId: senderId, deliveredAt: new Date() }] : [],
       isRead: isSelf ? true : false,
+      readBy: isSelf ? [{ userId: senderId, readAt: new Date() }] : [],
     });
 
     // Update conversation metadata

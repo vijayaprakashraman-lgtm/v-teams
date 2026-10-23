@@ -854,7 +854,10 @@ const sendChannelMessage = async (req, res) => {
       attachments,
       poll,
       replyTo: replyTo && mongoose.Types.ObjectId.isValid(replyTo) ? replyTo : null,
+      isDelivered: false,
+      deliveredTo: [{ userId: senderId, deliveredAt: new Date() }],
       isRead: false,
+      readBy: [{ userId: senderId, readAt: new Date() }],
     });
 
     // Update Channel lastMessage metadata

@@ -42,6 +42,15 @@ const markMessageAsRead = async (req, res) => {
     }
 
     message.isRead = true;
+    message.isDelivered = true;
+    if (!message.deliveredTo) message.deliveredTo = [];
+    if (!message.deliveredTo.some((d) => (d.userId?._id || d.userId)?.toString() === userId)) {
+      message.deliveredTo.push({ userId, deliveredAt: new Date() });
+    }
+    if (!message.readBy) message.readBy = [];
+    if (!message.readBy.some((r) => (r.userId?._id || r.userId)?.toString() === userId)) {
+      message.readBy.push({ userId, readAt: new Date() });
+    }
     await message.save();
 
     // Mark any corresponding notification for this user & message as read
@@ -117,8 +126,11 @@ const markMessagesAsRead = async (req, res) => {
     await Message.updateMany(
       { _id: { $in: accessibleIds } },
       {
-        $set: { isRead: true },
-        $addToSet: { readBy: { userId, readAt } },
+        $set: { isRead: true, isDelivered: true },
+        $addToSet: {
+          readBy: { userId, readAt },
+          deliveredTo: { userId, deliveredAt: readAt },
+        },
       }
     );
 
@@ -999,7 +1011,81 @@ const removeReaction = async (req, res) => {
   }
 };
 
+
+// @desc    Mark multiple messages as delivered for the authenticated user
+// @route   PATCH /api/messages/delivered
+// @access  Private
+const markMessagesAsDelivered = async (req, res) => {
+  try {
+    const { messageIds = [] } = req.body;
+    const userId = req.user.id;
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Array of messageIds is required' });
+    }
+
+    const validIds = messageIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid message IDs provided' });
+    }
+
+    const messages = await Message.find({ _id: { $in: validIds } });
+    const accessible = messages.filter((m) => {
+      const senderId = (m.sender?._id || m.sender?.id || m.sender)?.toString();
+      if (senderId === userId) return false;
+      return true;
+    });
+
+    if (accessible.length === 0) {
+      return res.status(200).json({ success: true, messageIds: [], deliveredAt: new Date().toISOString() });
+    }
+
+    const deliveredAt = new Date();
+    const accessibleIds = accessible.map((m) => m._id);
+
+    await Message.updateMany(
+      { _id: { $in: accessibleIds } },
+      {
+        $set: { isDelivered: true },
+        $addToSet: { deliveredTo: { userId, deliveredAt } },
+      }
+    );
+
+    const io = req.app.get('io');
+    if (io) {
+      const byScope = new Map();
+      accessible.forEach((message) => {
+        const scope = message.conversationId || message.channelId;
+        const key = `${message.conversationId ? 'conversation' : 'channel'}:${scope}`;
+        if (!byScope.has(key)) byScope.set(key, { message, ids: [] });
+        byScope.get(key).ids.push(message._id);
+      });
+
+      for (const { message, ids } of byScope.values()) {
+        const room = message.conversationId ? `conversation:${message.conversationId}` : `channel:${message.channelId}`;
+        const payload = {
+          conversationId: message.conversationId,
+          channelId: message.channelId,
+          messageIds: ids,
+          userId,
+          deliveredAt,
+        };
+        io.to(room).emit('message:delivered', payload);
+        if (message.sender) {
+          io.to(`user:${message.sender.toString()}`).emit('message:delivered', payload);
+        }
+      }
+    }
+
+    return res.status(200).json({ success: true, messageIds: accessibleIds, deliveredAt });
+  } catch (error) {
+    console.error('Mark Messages Delivered Error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error marking messages as delivered', error: error.message });
+  }
+};
+
 module.exports = {
+  markMessagesAsDelivered,
   markMessageAsRead,
   markMessagesAsRead,
   getMessageById,

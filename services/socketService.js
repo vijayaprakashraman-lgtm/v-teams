@@ -220,6 +220,142 @@ const initSocket = (io) => {
       }
     });
 
+    // Sync pending undelivered direct messages on connection
+    try {
+      Message.find({
+        receiver: userId,
+        isDelivered: false,
+        deleted: false,
+      })
+        .select('_id conversationId sender')
+        .limit(200)
+        .then((undelivered) => {
+          if (undelivered && undelivered.length > 0) {
+            socket.emit('message:pending_delivery', {
+              messageIds: undelivered.map((m) => m._id),
+            });
+          }
+        })
+        .catch((err) => console.error('Error fetching undelivered messages:', err.message));
+    } catch (err) {
+      console.error('Error in undelivered lookup:', err.message);
+    }
+
+    // Message Delivery Acknowledgement
+    socket.on('message:ack_delivery', async (data) => {
+      try {
+        const messageIds = Array.isArray(data?.messageIds) ? data.messageIds : (data?.messageId ? [data.messageId] : []);
+        if (messageIds.length === 0) return;
+        const validIds = messageIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) return;
+
+        const messages = await Message.find({ _id: { $in: validIds } });
+        const accessible = messages.filter((m) => {
+          const senderId = (m.sender?._id || m.sender?.id || m.sender)?.toString();
+          if (senderId === userId) return false;
+          if (m.conversationId && m.receiver) {
+            return m.receiver.toString() === userId;
+          }
+          if (m.channelId) return true;
+          return false;
+        });
+
+        if (accessible.length === 0) return;
+
+        const deliveredAt = new Date();
+        const accessibleIds = accessible.map((m) => m._id);
+
+        await Message.updateMany(
+          { _id: { $in: accessibleIds } },
+          {
+            $set: { isDelivered: true },
+            $addToSet: { deliveredTo: { userId, deliveredAt } },
+          }
+        );
+
+        const byScope = new Map();
+        accessible.forEach((msg) => {
+          const scope = msg.conversationId || msg.channelId;
+          const key = `${msg.conversationId ? 'conversation' : 'channel'}:${scope}`;
+          if (!byScope.has(key)) byScope.set(key, { message: msg, ids: [] });
+          byScope.get(key).ids.push(msg._id);
+        });
+
+        for (const { message: msg, ids } of byScope.values()) {
+          const room = msg.conversationId ? `conversation:${msg.conversationId}` : `channel:${msg.channelId}`;
+          const payload = {
+            conversationId: msg.conversationId,
+            channelId: msg.channelId,
+            messageIds: ids,
+            userId,
+            deliveredAt,
+          };
+          io.to(room).emit('message:delivered', payload);
+          if (msg.sender) {
+            io.to(`user:${msg.sender.toString()}`).emit('message:delivered', payload);
+          }
+        }
+      } catch (err) {
+        console.error('[Socket ack_delivery Error]:', err.message);
+      }
+    });
+
+    // Message Read Acknowledgement
+    socket.on('message:ack_read', async (data) => {
+      try {
+        const messageIds = Array.isArray(data?.messageIds) ? data.messageIds : (data?.messageId ? [data.messageId] : []);
+        if (messageIds.length === 0) return;
+        const validIds = messageIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) return;
+
+        const messages = await Message.find({ _id: { $in: validIds } });
+        const accessible = messages.filter((m) => {
+          const senderId = (m.sender?._id || m.sender?.id || m.sender)?.toString();
+          return senderId !== userId;
+        });
+        if (accessible.length === 0) return;
+
+        const readAt = new Date();
+        const accessibleIds = accessible.map((m) => m._id);
+
+        await Message.updateMany(
+          { _id: { $in: accessibleIds } },
+          {
+            $set: { isRead: true, isDelivered: true },
+            $addToSet: {
+              readBy: { userId, readAt },
+              deliveredTo: { userId, deliveredAt: readAt },
+            },
+          }
+        );
+
+        const byScope = new Map();
+        accessible.forEach((msg) => {
+          const scope = msg.conversationId || msg.channelId;
+          const key = `${msg.conversationId ? 'conversation' : 'channel'}:${scope}`;
+          if (!byScope.has(key)) byScope.set(key, { message: msg, ids: [] });
+          byScope.get(key).ids.push(msg._id);
+        });
+
+        for (const { message: msg, ids } of byScope.values()) {
+          const room = msg.conversationId ? `conversation:${msg.conversationId}` : `channel:${msg.channelId}`;
+          const payload = {
+            conversationId: msg.conversationId,
+            channelId: msg.channelId,
+            messageIds: ids,
+            userId,
+            readAt,
+          };
+          io.to(room).emit('message:read', payload);
+          if (msg.sender) {
+            io.to(`user:${msg.sender.toString()}`).emit('message:read', payload);
+          }
+        }
+      } catch (err) {
+        console.error('[Socket ack_read Error]:', err.message);
+      }
+    });
+
     // 3. Direct Conversation Rooms
     socket.on('conversation:join', async ({ conversationId }) => {
       try {
