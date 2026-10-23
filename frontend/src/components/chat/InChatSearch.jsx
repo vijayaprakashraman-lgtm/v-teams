@@ -35,6 +35,21 @@ function InChatSearch({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
+  const wrapperRef = useRef(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, onClose]);
 
   // Auto-focus input when search opens
   useEffect(() => {
@@ -117,7 +132,7 @@ function InChatSearch({
   };
 
   return (
-    <div className="inchat-search-wrapper">
+    <div className="inchat-search-wrapper" ref={wrapperRef}>
       {/* Search Input Bar */}
       <div className="inchat-search-bar">
         <div className="inchat-search-input-box">
@@ -146,16 +161,6 @@ function InChatSearch({
             </button>
           )}
         </div>
-
-        <button
-          type="button"
-          className="inchat-btn-close"
-          onClick={onClose}
-          title="Close search (Esc)"
-          aria-label="Close search"
-        >
-          Done
-        </button>
       </div>
 
       {/* Search Results Dropdown Overlay */}

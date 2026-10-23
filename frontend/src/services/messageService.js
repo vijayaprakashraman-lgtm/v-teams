@@ -26,7 +26,9 @@ export const sendMessage = async (conversationId, payload, replyTo = null) => {
     if (replyTo) {
       payload.append('replyTo', replyTo);
     }
-    const response = await api.post(`/conversations/${conversationId}/messages`, payload);
+    const response = await api.post(`/conversations/${conversationId}/messages`, payload, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   }
 

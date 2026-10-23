@@ -148,6 +148,24 @@ const messageSchema = new mongoose.Schema(
         },
       },
     ],
+    isDelivered: {
+      type: Boolean,
+      default: false,
+    },
+    deliveredTo: [
+      {
+        _id: false,
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        deliveredAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     // Level 12: Advanced Message Action Fields
     edited: {
       type: Boolean,
@@ -253,6 +271,9 @@ messageSchema.index({ channelId: 1, createdAt: -1 });
 messageSchema.index({ replyTo: 1 });
 messageSchema.index({ forwardedFrom: 1 });
 messageSchema.index({ deleted: 1 });
+messageSchema.index({ receiver: 1, isDelivered: 1 });
+messageSchema.index({ conversationId: 1, isDelivered: 1 });
+messageSchema.index({ channelId: 1, isDelivered: 1 });
 
 // Text index for full-text search across message content and attachment filenames
 messageSchema.index(

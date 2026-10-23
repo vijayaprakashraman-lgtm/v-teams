@@ -38,6 +38,10 @@ export const SocketProvider = ({ children }) => {
     const onConnect = () => {
       console.log('Socket connected to server');
       setIsConnected(true);
+      const orgId = user?.currentOrganization?._id || user?.currentOrganization;
+      if (orgId) {
+        joinCompanyRoom(orgId);
+      }
     };
 
     const onDisconnect = (reason) => {
@@ -75,6 +79,10 @@ export const SocketProvider = ({ children }) => {
     // Initial check if already connected
     if (socketInstance.connected) {
       setIsConnected(true);
+      const orgId = user?.currentOrganization?._id || user?.currentOrganization;
+      if (orgId) {
+        joinCompanyRoom(orgId);
+      }
     }
 
     return () => {

@@ -141,7 +141,25 @@ function UserManagement({ currentAdminId }) {
       }
     } catch (err) {
       console.error('Invite failed:', err.message);
-      setError(err.response?.data?.message || 'Failed to send invitation');
+      let errorMessage = err.response?.data?.message || 'Failed to send invitation';
+      
+      if (errorMessage.includes('unrecognised IP address')) {
+        errorMessage = 'Failed to send invitation: Your server IP address is not authorized in Brevo. Please add it to your Brevo security settings.';
+      } else if (errorMessage.includes('[Raw:')) {
+        try {
+          const rawMatch = errorMessage.match(/\[Raw:\s*(\{.*\})\s*\]/);
+          if (rawMatch && rawMatch[1]) {
+            const parsed = JSON.parse(rawMatch[1]);
+            if (parsed.message) {
+              errorMessage = `Failed to send invitation: ${parsed.message}`;
+            }
+          }
+        } catch (e) {
+          // Keep original error if parsing fails
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setSendingInvite(false);
     }
@@ -280,9 +298,6 @@ function UserManagement({ currentAdminId }) {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <MailIcon size={15} /> Invitations
           </span>
-          {pendingInvitationsCount > 0 && (
-            <span className="subnav-badge badge-pending-count">{pendingInvitationsCount}</span>
-          )}
         </button>
       </div>
 

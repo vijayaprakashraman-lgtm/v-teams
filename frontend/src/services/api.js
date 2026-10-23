@@ -3,7 +3,7 @@ import axios from 'axios';
 // Create a configured Axios instance
 // Uses live Railway API by default or overridden via VITE_API_URL
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://v-teams.onrender.com/api',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -31,11 +31,7 @@ api.interceptors.request.use(
     }
     // For FormData payloads, remove Content-Type so the browser/axios attaches multipart boundary automatically
     if (config.data instanceof FormData) {
-      if (config.headers && typeof config.headers.delete === 'function') {
-        config.headers.delete('Content-Type');
-      } else if (config.headers) {
-        delete config.headers['Content-Type'];
-      }
+      delete config.headers['Content-Type'];
     }
     return config;
   },

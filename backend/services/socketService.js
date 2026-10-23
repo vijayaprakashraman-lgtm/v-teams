@@ -220,6 +220,142 @@ const initSocket = (io) => {
       }
     });
 
+    // Sync pending undelivered direct messages on connection
+    try {
+      Message.find({
+        receiver: userId,
+        isDelivered: false,
+        deleted: false,
+      })
+        .select('_id conversationId sender')
+        .limit(200)
+        .then((undelivered) => {
+          if (undelivered && undelivered.length > 0) {
+            socket.emit('message:pending_delivery', {
+              messageIds: undelivered.map((m) => m._id),
+            });
+          }
+        })
+        .catch((err) => console.error('Error fetching undelivered messages:', err.message));
+    } catch (err) {
+      console.error('Error in undelivered lookup:', err.message);
+    }
+
+    // Message Delivery Acknowledgement
+    socket.on('message:ack_delivery', async (data) => {
+      try {
+        const messageIds = Array.isArray(data?.messageIds) ? data.messageIds : (data?.messageId ? [data.messageId] : []);
+        if (messageIds.length === 0) return;
+        const validIds = messageIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) return;
+
+        const messages = await Message.find({ _id: { $in: validIds } });
+        const accessible = messages.filter((m) => {
+          const senderId = (m.sender?._id || m.sender?.id || m.sender)?.toString();
+          if (senderId === userId) return false;
+          if (m.conversationId && m.receiver) {
+            return m.receiver.toString() === userId;
+          }
+          if (m.channelId) return true;
+          return false;
+        });
+
+        if (accessible.length === 0) return;
+
+        const deliveredAt = new Date();
+        const accessibleIds = accessible.map((m) => m._id);
+
+        await Message.updateMany(
+          { _id: { $in: accessibleIds } },
+          {
+            $set: { isDelivered: true },
+            $addToSet: { deliveredTo: { userId, deliveredAt } },
+          }
+        );
+
+        const byScope = new Map();
+        accessible.forEach((msg) => {
+          const scope = msg.conversationId || msg.channelId;
+          const key = `${msg.conversationId ? 'conversation' : 'channel'}:${scope}`;
+          if (!byScope.has(key)) byScope.set(key, { message: msg, ids: [] });
+          byScope.get(key).ids.push(msg._id);
+        });
+
+        for (const { message: msg, ids } of byScope.values()) {
+          const room = msg.conversationId ? `conversation:${msg.conversationId}` : `channel:${msg.channelId}`;
+          const payload = {
+            conversationId: msg.conversationId,
+            channelId: msg.channelId,
+            messageIds: ids,
+            userId,
+            deliveredAt,
+          };
+          io.to(room).emit('message:delivered', payload);
+          if (msg.sender) {
+            io.to(`user:${msg.sender.toString()}`).emit('message:delivered', payload);
+          }
+        }
+      } catch (err) {
+        console.error('[Socket ack_delivery Error]:', err.message);
+      }
+    });
+
+    // Message Read Acknowledgement
+    socket.on('message:ack_read', async (data) => {
+      try {
+        const messageIds = Array.isArray(data?.messageIds) ? data.messageIds : (data?.messageId ? [data.messageId] : []);
+        if (messageIds.length === 0) return;
+        const validIds = messageIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) return;
+
+        const messages = await Message.find({ _id: { $in: validIds } });
+        const accessible = messages.filter((m) => {
+          const senderId = (m.sender?._id || m.sender?.id || m.sender)?.toString();
+          return senderId !== userId;
+        });
+        if (accessible.length === 0) return;
+
+        const readAt = new Date();
+        const accessibleIds = accessible.map((m) => m._id);
+
+        await Message.updateMany(
+          { _id: { $in: accessibleIds } },
+          {
+            $set: { isRead: true, isDelivered: true },
+            $addToSet: {
+              readBy: { userId, readAt },
+              deliveredTo: { userId, deliveredAt: readAt },
+            },
+          }
+        );
+
+        const byScope = new Map();
+        accessible.forEach((msg) => {
+          const scope = msg.conversationId || msg.channelId;
+          const key = `${msg.conversationId ? 'conversation' : 'channel'}:${scope}`;
+          if (!byScope.has(key)) byScope.set(key, { message: msg, ids: [] });
+          byScope.get(key).ids.push(msg._id);
+        });
+
+        for (const { message: msg, ids } of byScope.values()) {
+          const room = msg.conversationId ? `conversation:${msg.conversationId}` : `channel:${msg.channelId}`;
+          const payload = {
+            conversationId: msg.conversationId,
+            channelId: msg.channelId,
+            messageIds: ids,
+            userId,
+            readAt,
+          };
+          io.to(room).emit('message:read', payload);
+          if (msg.sender) {
+            io.to(`user:${msg.sender.toString()}`).emit('message:read', payload);
+          }
+        }
+      } catch (err) {
+        console.error('[Socket ack_read Error]:', err.message);
+      }
+    });
+
     // 3. Direct Conversation Rooms
     socket.on('conversation:join', async ({ conversationId }) => {
       try {
@@ -441,6 +577,26 @@ const initSocket = (io) => {
           callType: data.callType,
           conversationId: data.conversationId,
         });
+
+        try {
+          const { sendPushToUser } = require('./pushNotificationService');
+          const callTypeLabel = (data.callType === 'video') ? 'Video' : 'Audio';
+          sendPushToUser(data.receiverId, {
+            title: `Incoming ${callTypeLabel} Call`,
+            body: `From ${socket.user.name}`,
+            data: {
+              type: 'call',
+              callType: data.callType === 'video' ? 'video' : 'audio',
+              callerId: String(userId),
+              callerName: String(socket.user.name || 'Caller'),
+              callerAvatar: String(socket.user.avatar || ''),
+              roomId: String(data.roomId || `call_${userId}_${data.receiverId}`),
+              conversationId: String(data.conversationId || ''),
+            }
+          }).catch(err => console.error('[CALL PUSH ERROR]', err.message));
+        } catch (pushErr) {
+          console.error('[CALL PUSH ERROR]', pushErr.message);
+        }
       }
     });
 
@@ -635,7 +791,12 @@ const initSocket = (io) => {
       if (data.channelId) {
         // Enforce authoritative call type for active session
         if (!activeLiveKitCalls.has(data.roomId)) {
-          activeLiveKitCalls.set(data.roomId, { callType: !!data.audioOnly, users: new Set() });
+          activeLiveKitCalls.set(data.roomId, {
+            callType: !!data.audioOnly,
+            channelId: data.channelId,
+            conversationId: null,
+            users: new Set(),
+          });
         }
         const session = activeLiveKitCalls.get(data.roomId);
         session.users.add(userId);
@@ -647,21 +808,39 @@ const initSocket = (io) => {
 
         const Channel = require('../models/Channel');
         const Message = require('../models/Message');
+        const { sendPushToUser } = require('./pushNotificationService');
         try {
           const channel = await Channel.findById(data.channelId);
           if (channel) {
-            // Emit incoming invite to all channel members except the caller
+            const callTypeLabel = data.audioOnly ? 'Audio' : 'Video';
+            // Emit incoming invite & push notification to all channel members except caller
             channel.members.forEach(memberId => {
-              if (memberId.toString() !== userId) {
-                io.to(`user:${memberId.toString()}`).emit('livekit:incoming_invite', {
+              const memIdStr = memberId.toString();
+              if (memIdStr !== userId) {
+                io.to(`user:${memIdStr}`).emit('livekit:incoming_invite', {
                   inviterId: userId,
                   inviterName: socket.user.name,
                   inviterAvatar: socket.user.avatar,
                   roomId: data.roomId,
-                  contextName: data.contextName,
+                  contextName: data.contextName || channel.name,
                   channelId: data.channelId,
                   audioOnly: data.audioOnly,
                 });
+
+                sendPushToUser(memIdStr, {
+                  title: `Incoming ${callTypeLabel} Call in #${channel.name}`,
+                  body: `From ${socket.user.name}`,
+                  data: {
+                    type: 'call',
+                    callType: data.audioOnly ? 'audio' : 'video',
+                    callerId: String(userId),
+                    callerName: String(socket.user.name || 'Caller'),
+                    callerAvatar: String(socket.user.avatar || ''),
+                    roomId: String(data.roomId || ''),
+                    channelId: String(data.channelId || ''),
+                    channelName: String(channel.name || ''),
+                  }
+                }).catch(err => console.error('[CHANNEL CALL PUSH ERROR]', err.message));
               }
             });
 
@@ -692,7 +871,12 @@ const initSocket = (io) => {
       if (data.conversationId) {
         // Enforce authoritative call type for active session
         if (!activeLiveKitCalls.has(data.roomId)) {
-          activeLiveKitCalls.set(data.roomId, { callType: !!data.audioOnly, users: new Set() });
+          activeLiveKitCalls.set(data.roomId, {
+            callType: !!data.audioOnly,
+            channelId: null,
+            conversationId: data.conversationId,
+            users: new Set(),
+          });
         }
         const session = activeLiveKitCalls.get(data.roomId);
         session.users.add(userId);
@@ -703,20 +887,38 @@ const initSocket = (io) => {
         }
 
         const Conversation = require('../models/Conversation');
+        const { sendPushToUser } = require('./pushNotificationService');
         try {
           const conversation = await Conversation.findById(data.conversationId);
           if (conversation && conversation.participants) {
+            const callTypeLabel = data.audioOnly ? 'Audio' : 'Video';
             conversation.participants.forEach(memberId => {
-              if (memberId.toString() !== userId) {
-                io.to(`user:${memberId.toString()}`).emit('livekit:incoming_invite', {
+              const memIdStr = memberId.toString();
+              if (memIdStr !== userId) {
+                io.to(`user:${memIdStr}`).emit('livekit:incoming_invite', {
                   inviterId: userId,
                   inviterName: socket.user.name,
                   inviterAvatar: socket.user.avatar,
                   roomId: data.roomId,
-                  contextName: data.contextName,
+                  contextName: data.contextName || conversation.name,
                   conversationId: data.conversationId,
                   audioOnly: data.audioOnly,
                 });
+
+                sendPushToUser(memIdStr, {
+                  title: `Incoming ${callTypeLabel} Call`,
+                  body: `From ${socket.user.name}`,
+                  data: {
+                    type: 'call',
+                    callType: data.audioOnly ? 'audio' : 'video',
+                    callerId: String(userId),
+                    callerName: String(socket.user.name || 'Caller'),
+                    callerAvatar: String(socket.user.avatar || ''),
+                    roomId: String(data.roomId || ''),
+                    conversationId: String(data.conversationId || ''),
+                    isGroup: 'true',
+                  }
+                }).catch(err => console.error('[GROUP CALL PUSH ERROR]', err.message));
               }
             });
           }
@@ -733,6 +935,9 @@ const initSocket = (io) => {
           session.users.delete(userId);
           if (session.users.size === 0) {
             activeLiveKitCalls.delete(data.roomId);
+            if (session.channelId) {
+              io.emit('channel:call:ended', { channelId: session.channelId, roomId: data.roomId });
+            }
           }
         }
       }

@@ -1003,6 +1003,37 @@ function AppLayout() {
       }
     };
 
+    
+    const handleMessagesDelivered = ({ conversationId, channelId, messageIds = [], userId, deliveredAt }) => {
+      if (!messageIds.length) return;
+      const updateDeliveredList = (list) => list.map((message) => (
+        messageIds.some((id) => id.toString() === (message._id || message.id)?.toString())
+          ? {
+            ...message,
+            isDelivered: true,
+            deliveredTo: [
+              ...(message.deliveredTo || []).filter((deliv) => (deliv.userId?._id || deliv.userId)?.toString() !== userId.toString()),
+              { userId, deliveredAt },
+            ],
+          }
+          : message
+      ));
+      if (conversationId) {
+        const id = conversationId.toString();
+        setMessagesMap((prev) => ({ ...prev, [id]: updateDeliveredList(prev[id] || []) }));
+      }
+      if (channelId) {
+        const id = channelId.toString();
+        setChannelMessagesMap((prev) => ({ ...prev, [id]: updateDeliveredList(prev[id] || []) }));
+      }
+    };
+
+    const handlePendingDelivery = ({ messageIds = [] }) => {
+      if (Array.isArray(messageIds) && messageIds.length > 0) {
+        socket.emit('message:ack_delivery', { messageIds });
+      }
+    };
+
     const handleMessagesRead = ({ conversationId, channelId, messageIds = [], userId, readAt }) => {
       if (!messageIds.length) return;
       const updateReadList = (list) => list.map((message) => (
@@ -1075,6 +1106,8 @@ function AppLayout() {
     socket.on('channel:message:deleted', handleMessageDeleted);
     socket.on('message:reaction:updated', handleReactionUpdated);
     socket.on('message:read', handleMessagesRead);
+    socket.on('message:delivered', handleMessagesDelivered);
+    socket.on('message:pending_delivery', handlePendingDelivery);
     socket.on('message:pinned', handlePinned);
     socket.on('message:unpinned', handleUnpinned);
     socket.on('message:poll_voted', handlePollVoted);
@@ -1099,6 +1132,8 @@ function AppLayout() {
       socket.off('channel:message:deleted', handleMessageDeleted);
       socket.off('message:reaction:updated', handleReactionUpdated);
       socket.off('message:read', handleMessagesRead);
+      socket.off('message:delivered', handleMessagesDelivered);
+      socket.off('message:pending_delivery', handlePendingDelivery);
       socket.off('message:pinned', handlePinned);
       socket.off('message:unpinned', handleUnpinned);
       socket.off('message:poll_voted', handlePollVoted);
@@ -1510,7 +1545,12 @@ function AppLayout() {
       let payload;
       if (hasFiles) {
         payload = new FormData();
-        if (hasText) payload.append('content', (typeof content === 'string' ? content : content.content).trim());
+        if (typeof content === 'string') {
+          if (hasText) payload.append('content', content.trim());
+        } else {
+          if (hasText && content.content) payload.append('content', content.content.trim());
+          if (content.messageType) payload.append('messageType', content.messageType);
+        }
         files.forEach((file) => payload.append('files', file));
       } else if (isPoll) {
         payload = content;
@@ -1537,13 +1577,15 @@ function AppLayout() {
         });
       }
     } catch (err) {
-      console.error('Failed to send message:', err.message, err.response?.data);
+      console.error('Failed to send message:', err.message);
       if (err.response?.data?.code === 'ORG_EXPIRED' || err.response?.data?.companyStatus === 'expired') {
         setLiveStatus('expired');
       } else if (err.response?.data?.code === 'ORG_SUSPENDED' || err.response?.data?.companyStatus === 'suspended') {
         setLiveStatus('suspended');
+      } else if (err.response?.data?.code === 'STORAGE_LIMIT_EXCEEDED' || err.response?.data?.code === 'FILE_SIZE_LIMIT_EXCEEDED') {
+        setApiError(err.response.data.message);
       } else {
-        setApiError('Failed to send message. Please try again.');
+        setApiError(err.response?.data?.message || 'Failed to send message. Please try again.');
       }
     } finally {
       setIsSendingMessage(false);
@@ -1571,7 +1613,12 @@ function AppLayout() {
       let payload;
       if (hasFiles) {
         payload = new FormData();
-        if (hasText) payload.append('content', (typeof content === 'string' ? content : content.content).trim());
+        if (typeof content === 'string') {
+          if (hasText) payload.append('content', content.trim());
+        } else {
+          if (hasText && content.content) payload.append('content', content.content.trim());
+          if (content.messageType) payload.append('messageType', content.messageType);
+        }
         files.forEach((file) => payload.append('files', file));
       } else if (isPoll) {
         payload = content;
@@ -1598,13 +1645,15 @@ function AppLayout() {
         });
       }
     } catch (err) {
-      console.error('Failed to send channel message:', err.message, err.response?.data);
+      console.error('Failed to send channel message:', err.message);
       if (err.response?.data?.code === 'ORG_EXPIRED' || err.response?.data?.companyStatus === 'expired') {
         setLiveStatus('expired');
       } else if (err.response?.data?.code === 'ORG_SUSPENDED' || err.response?.data?.companyStatus === 'suspended') {
         setLiveStatus('suspended');
+      } else if (err.response?.data?.code === 'STORAGE_LIMIT_EXCEEDED' || err.response?.data?.code === 'FILE_SIZE_LIMIT_EXCEEDED') {
+        setApiError(err.response.data.message);
       } else {
-        setApiError('Failed to send message to channel.');
+        setApiError(err.response?.data?.message || 'Failed to send message to channel.');
       }
     } finally {
       setIsSendingMessage(false);
@@ -2574,6 +2623,8 @@ function AppLayout() {
                       (m) => (m._id || m.id || m)?.toString() === currentUserId?.toString()
                     )
                   )}
+                  contacts={contacts}
+                  onSelectContact={handleMessageContact}
                   currentUserId={currentUserId}
                   onlineUserIds={onlineUserIds}
                   selectedChat={selectedChat}
@@ -2706,7 +2757,6 @@ function AppLayout() {
                     onPromoteAdmin={handlePromoteChannelAdmin}
                     availableUsers={contacts}
                     userRole={user?.role}
-                    globalRole={user?.globalRole}
                     onTyping={() => currentChannelId && emitChannelTyping(currentChannelId)}
                     onStopTyping={() => currentChannelId && emitChannelStopTyping(currentChannelId)}
                     typingUser={formatTypingUsers(channelTypingMap[currentChannelId])}
@@ -2757,7 +2807,6 @@ function AppLayout() {
                     onPromoteAdmin={handlePromoteChannelAdmin}
                     availableUsers={contacts}
                     userRole={user?.role}
-                    globalRole={user?.globalRole}
                     onTyping={() => currentChannelId && emitChannelTyping(currentChannelId)}
                     onStopTyping={() => currentChannelId && emitChannelStopTyping(currentChannelId)}
                     typingUser={formatTypingUsers(channelTypingMap[currentChannelId])}

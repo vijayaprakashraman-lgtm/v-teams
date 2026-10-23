@@ -1,4 +1,4 @@
-const { isInitialized } = require('../config/firebaseAdmin');
+﻿const { isInitialized } = require('../config/firebaseAdmin');
 const { getMessaging } = require('firebase-admin/messaging');
 const User = require('../models/User');
 
@@ -22,19 +22,62 @@ const sendPushToUser = async (userId, payload) => {
       tokens: user.fcmTokens,
     };
 
-    if (payload.title || payload.body) {
-      message.notification = {
-        title: payload.title || 'New Notification',
-        body: payload.body || '',
-      };
-    }
-
     if (payload.data && Object.keys(payload.data).length > 0) {
       const stringData = {};
       for (const [key, val] of Object.entries(payload.data)) {
         stringData[key] = val != null ? String(val) : '';
       }
       message.data = stringData;
+    }
+
+    const isCallNotification = payload.data?.type === 'call' ||
+                               payload.data?.type === 'incoming_call' ||
+                               payload.data?.callType != null;
+
+    if (isCallNotification) {
+      // DATA-ONLY message for calls!
+      // Do NOT set message.notification! Setting message.notification causes Android OS
+      // system tray to automatically pop a generic passive message notification banner
+      // ("New message") and skips onMessageReceived when the app is in recent/closed state.
+      // Data-only messages wake up onMessageReceived/MyFirebaseMessagingService which launches
+      // the high-priority full-screen incoming call UI with Ringtone and Answer/Decline buttons.
+      message.android = {
+        priority: 'high',
+        ttl: 45 * 1000, // 45 seconds timeout for calls
+      };
+      message.apns = {
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'background',
+          'apns-expiration': String(Math.floor(Date.now() / 1000) + 45),
+        },
+        payload: {
+          aps: {
+            contentAvailable: true,
+          },
+        },
+      };
+    } else {
+      // Standard messages include notification payload
+      if (payload.title || payload.body) {
+        message.notification = {
+          title: payload.title || 'New Notification',
+          body: payload.body || '',
+        };
+      }
+      message.android = {
+        priority: 'high',
+        notification: {
+          channelId: 'v_chat_messages_v2',
+        },
+      };
+      message.apns = {
+        payload: {
+          aps: {
+            sound: 'default',
+          },
+        },
+      };
     }
 
     const response = await getMessaging().sendEachForMulticast(message);

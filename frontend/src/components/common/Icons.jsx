@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Centralized Icon Repository for Flock ChatApp
+ * Centralized Icon Repository for V-Teams
  * All application icons are defined here as clean, modern SVG components.
  */
 
@@ -466,22 +466,57 @@ export const VideoOffIcon = ({ size = 18, color = 'currentColor', strokeWidth = 
 
 
 
-
 export const PlayIcon = ({ size = 18, color = 'currentColor', strokeWidth = 2, className, style }) => (
-  <SvgIcon size={size} color={color} strokeWidth={strokeWidth} className={className} style={style}>
-    <polygon points="5 3 19 12 5 21 5 3" />
-  </SvgIcon>
+  <svg viewBox="0 0 24 24" width={size} height={size} stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+  </svg>
 );
-
 export const PauseIcon = ({ size = 18, color = 'currentColor', strokeWidth = 2, className, style }) => (
-  <SvgIcon size={size} color={color} strokeWidth={strokeWidth} className={className} style={style}>
-    <rect x="6" y="4" width="4" height="16" />
-    <rect x="14" y="4" width="4" height="16" />
-  </SvgIcon>
+  <svg viewBox="0 0 24 24" width={size} height={size} stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <rect x="6" y="4" width="4" height="16"></rect>
+    <rect x="14" y="4" width="4" height="16"></rect>
+  </svg>
+);
+export const StopIcon = ({ size = 18, color = 'currentColor', strokeWidth = 2, className, style }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+  </svg>
 );
 
-export const StopIcon = ({ size = 18, color = 'currentColor', strokeWidth = 2, className, style }) => (
-  <SvgIcon size={size} color={color} strokeWidth={strokeWidth} className={className} style={style}>
-    <rect x="6" y="6" width="12" height="12" />
-  </SvgIcon>
+
+// 20A. SINGLE CHECK ICON (Sent ✓)
+export const SingleCheckIcon = ({ size = 15, color = 'currentColor', strokeWidth = 2.2, className, style }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    fill="none"
+    stroke={color}
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', ...style }}
+  >
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+// 20B. DOUBLE CHECK ICON (Delivered ✓✓ / Read ✓✓)
+export const DoubleCheckIcon = ({ size = 16, color = 'currentColor', strokeWidth = 2.2, className, style }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    fill="none"
+    stroke={color}
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', ...style }}
+  >
+    <path d="M18 6L9 17l-4-5" />
+    <path d="M22 10l-7.5 9-2.5-3" />
+  </svg>
 );

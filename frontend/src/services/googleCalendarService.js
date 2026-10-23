@@ -1,4 +1,4 @@
-﻿import api from "./api";
+import api from "./api";
 
 export const getGoogleCalendarStatus = async () => {
   const { data } = await api.get("/google/status");
@@ -12,7 +12,7 @@ export const initiateGoogleCalendarConnect = () => {
   }
   const baseUrl = import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL.replace("/api", "")
-    : "http://localhost:5000";
+    : "https://v-teams.onrender.com";
   window.location.href = `${baseUrl}/api/google/auth?token=${encodeURIComponent(token)}`;
 };
 

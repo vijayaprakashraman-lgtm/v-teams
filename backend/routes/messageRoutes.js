@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   markMessageAsRead,
   markMessagesAsRead,
+  markMessagesAsDelivered,
   getMessageById,
   editMessage,
   deleteMessage,
@@ -19,6 +20,7 @@ const { requireActiveOrg, requireApprovedOrg, requireFeature } = require('../mid
 router.use(protect);
 
 // Read/mark-read operations — allowed for approved organizations (including suspended/expired)
+router.patch('/delivered', requireApprovedOrg, markMessagesAsDelivered);
 router.patch('/read', requireApprovedOrg, markMessagesAsRead);
 router.patch('/mark-read', requireApprovedOrg, markMessagesAsRead);
 router.get('/:messageId', requireApprovedOrg, getMessageById);

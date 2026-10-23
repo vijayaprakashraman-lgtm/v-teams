@@ -13,13 +13,6 @@ const ICE_SERVERS = {
 export const CallProvider = ({ children }) => {
   const { socket } = useSocket();
   const [callState, setCallState] = useState('idle'); // 'idle', 'ringing', 'in-call', 'calling'
-  const callStateRef = useRef('idle');
-
-  const updateCallState = useCallback((newState) => {
-    callStateRef.current = newState;
-    setCallState(newState);
-  }, []);
-
   const [incomingCall, setIncomingCall] = useState(null); // { callerId, callerName, callerAvatar, callType }
   const [remoteUser, setRemoteUser] = useState(null); // { id, name, avatar }
   const [callType, setCallType] = useState('audio'); // 'audio', 'video'
@@ -50,13 +43,13 @@ export const CallProvider = ({ children }) => {
     }
     setLocalStream(null);
     setRemoteStream(null);
-    updateCallState('idle');
+    setCallState('idle');
     setIncomingCall(null);
     setRemoteUser(null);
     setIsAudioMuted(false);
     setIsVideoMuted(false);
     setIsScreenSharing(false);
-  }, [updateCallState]);
+  }, []);
 
   const getMediaStream = async (type) => {
     try {
@@ -101,10 +94,10 @@ export const CallProvider = ({ children }) => {
   };
 
   const initiateCall = async (targetUser, type = 'audio', conversationId = null) => {
-    if (callStateRef.current !== 'idle') return;
+    if (callState !== 'idle') return;
     setRemoteUser(targetUser);
     setCallType(type);
-    updateCallState('calling');
+    setCallState('calling');
 
     const stream = await getMediaStream(type);
     if (!stream) {
@@ -127,7 +120,7 @@ export const CallProvider = ({ children }) => {
     
     setRemoteUser({ id: callerId, name: callerName, avatar: callerAvatar });
     setCallType(type);
-    updateCallState('in-call');
+    setCallState('in-call');
 
     const stream = await getMediaStream(type);
     if (!stream) {
@@ -213,7 +206,7 @@ export const CallProvider = ({ children }) => {
   }, []);
 
   const startScreenShare = async () => {
-    if (callType !== 'video' || callStateRef.current !== 'in-call') return;
+    if (callType !== 'video' || callState !== 'in-call') return;
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const screenTrack = screenStream.getVideoTracks()[0];
@@ -252,19 +245,19 @@ export const CallProvider = ({ children }) => {
     if (!socket) return;
 
     const handleIncoming = (data) => {
-      if (callStateRef.current !== 'idle') {
+      if (callState !== 'idle') {
         // Already in a call, automatically reject (busy)
         socket.emit('call:reject', { callerId: data.callerId });
         return;
       }
       setIncomingCall(data);
-      updateCallState('ringing');
+      setCallState('ringing');
     };
 
     const handleAccepted = async (data) => {
       // Receiver accepted the call, caller needs to create offer
-      if (callStateRef.current !== 'calling' && callStateRef.current !== 'in-call') return;
-      updateCallState('in-call');
+      if (callState !== 'calling' && callState !== 'in-call') return;
+      setCallState('in-call');
       
       const targetId = data.receiverId;
       const pc = createPeerConnection(targetId);
@@ -284,8 +277,7 @@ export const CallProvider = ({ children }) => {
     };
 
     const handleOffer = async (data) => {
-      if (callStateRef.current !== 'in-call' && callStateRef.current !== 'calling') return;
-      updateCallState('in-call');
+      if (callState !== 'in-call') return;
       const targetId = data.senderId;
       const pc = createPeerConnection(targetId);
       
@@ -340,7 +332,7 @@ export const CallProvider = ({ children }) => {
       socket.off('call:ice-candidate', handleIceCandidate);
       socket.off('call:ended', handleEnded);
     };
-  }, [socket, resetCall, updateCallState]);
+  }, [socket, callState, resetCall]);
 
   return (
     <CallContext.Provider
