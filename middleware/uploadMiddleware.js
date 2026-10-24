@@ -112,6 +112,45 @@ const upload = multer({
 });
 
 /**
+ * Converts uploaded image files (JPG, PNG, BMP, etc.) to optimized WebP format on the server.
+ */
+const convertImagesToWebp = async (files) => {
+  if (!files || files.length === 0) return;
+  let sharp;
+  try {
+    sharp = require('sharp');
+  } catch (e) {
+    return;
+  }
+
+  for (const file of files) {
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) continue;
+    if (file.mimetype === 'image/webp' || file.filename.endsWith('.webp')) continue;
+
+    try {
+      const parsedPath = path.parse(file.path);
+      const webpFilename = `${parsedPath.name}.webp`;
+      const webpPath = path.join(parsedPath.dir, webpFilename);
+
+      await sharp(file.path)
+        .webp({ quality: 80 })
+        .toFile(webpPath);
+
+      if (fs.existsSync(file.path)) {
+        try { fs.unlinkSync(file.path); } catch (_) {}
+      }
+
+      file.filename = webpFilename;
+      file.path = webpPath;
+      file.mimetype = 'image/webp';
+      file.size = fs.statSync(webpPath).size;
+    } catch (err) {
+      console.error('Server-side WebP conversion warning:', err.message);
+    }
+  }
+};
+
+/**
  * Express middleware wrapper that intercepts Multer errors and validates video vs image vs document file size limits
  * @param {string} fieldName - Form field name (default 'files')
  * @param {number} maxCount - Max files (default 5)
@@ -140,6 +179,7 @@ const handleUpload = (fieldName = 'files', maxCount = 5) => {
       }
 
       if (req.files && req.files.length > 0) {
+        await convertImagesToWebp(req.files);
         if (!req.file) {
           req.file = req.files[0];
         }

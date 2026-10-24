@@ -94,7 +94,14 @@ app.use('/uploads', (req, res, next) => {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     }
   }
-}));
+}), (req, res) => {
+  // Fallback if requested upload file does not exist on disk
+  return res.status(404).json({
+    success: false,
+    message: 'File no longer exists on server disk',
+    code: 'FILE_NOT_FOUND',
+  });
+});
 
 // Health Check API Routes
 app.get('/', (req, res) => {
