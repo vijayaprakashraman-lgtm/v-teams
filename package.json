@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "backend",
   "version": "1.0.0",
@@ -29,5 +30,22 @@
   "devDependencies": {
     "nodemon": "^3.1.14",
     "pdfkit": "^0.20.2"
+=======
+
+{
+  "name": "chatapp-workspace",
+  "version": "1.0.0",
+  "description": "Fullstack Team Chat Application with Socket.IO, Channels, File Sharing & Admin Moderation",
+  "scripts": {
+    "dev": "npx concurrently --kill-others-on-fail -n \"backend,frontend\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "start": "node backend/server.js",
+    "build": "npm run build --prefix frontend",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+>>>>>>> abinaya/main
   }
 }
