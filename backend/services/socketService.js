@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Channel = require('../models/Channel');
 const Membership = require('../models/Membership');
+const Message = require('../models/Message');
 
 let ioInstance = null;
 
