@@ -3,8 +3,9 @@ const path = require('path');
 const express = require('express');
 const dotenv = require('dotenv');
 
-// Load environment variables from .env file FIRST and override existing
+// Load environment variables from .env file FIRST (both in backend/ and root) and override existing
 dotenv.config({ path: path.join(__dirname, '.env'), override: true });
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // --- STARTUP DIAGNOSTIC ---
 const testKey = process.env.BREVO_API_KEY;
