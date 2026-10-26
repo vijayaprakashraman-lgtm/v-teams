@@ -260,7 +260,18 @@ async function sendBrevoInvitationEmail({ toEmail, inviterName, companyName, acc
       responseData?.message ||
       responseData?.error ||
       `HTTP error ${response.status}`;
-      
+
+    if (
+      errorDetail.toLowerCase().includes('ip address') ||
+      errorDetail.toLowerCase().includes('unauthorized ip') ||
+      responseText.toLowerCase().includes('ip address') ||
+      responseText.toLowerCase().includes('unauthorized ip')
+    ) {
+      throw new Error(
+        'Your server IP address is not authorized in Brevo. Please remove IP restrictions in Brevo Dashboard (Security -> Authorized IPs) or allow all IPs for your API key.'
+      );
+    }
+
     const keyPrefix = apiKey ? `${apiKey.substring(0, 8)}...` : 'undefined';
     const keyLength = apiKey ? apiKey.length : 0;
     
